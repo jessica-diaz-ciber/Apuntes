@@ -124,9 +124,9 @@ Tenemos estos comandos:
 | Enviar señal a un grupo de procesos - antes del PID | `kill -SIGTERM -1234`                 |
 
 ---
-# 3. 🔧 Servicios — systemd
+# 2. 🔧 Servicios — systemd
 
-## 3.1. La pila de red del kernel
+## 2.1. La pila de red del kernel
 
 ```
   Aplicación (nginx, curl...)
@@ -148,7 +148,7 @@ Tenemos estos comandos:
 ```
 
 ---
-## 3.2. ¿Qué es systemd?
+## 2.2. ¿Qué es systemd?
 
 **systemd** es el sistema de init y gestor de servicios estándar en las distribuciones Linux modernas. Reemplaza al init clásico de SysV. Es el PID 1 del sistema — el primer proceso que arranca el kernel y del que dependen todos los demás.
 
@@ -165,7 +165,7 @@ systemd (PID 1)
 ```
 
 ---
-## 3.3. Units — los bloques de systemd
+## 2.3. Units — los bloques de systemd
 
 Todo en systemd se gestiona mediante **units** (archivos de configuración):
 
@@ -188,7 +188,7 @@ Ubicación de los archivos unit
 ```
 
 ---
-## 3.4. Anatomía de un archivo `.service`
+## 2.4. Anatomía de un archivo `.service`
 
 Por ejemplo `/etc/systemd/system/mi-app.service`
 ```bash
@@ -239,7 +239,7 @@ WantedBy=multi-user.target   # a qué target pertenece (arranca con el sistema)
 | `idle`    | Como `simple` pero espera a que no haya otros jobs pendientes |
 
 ---
-## 3.5. Logs — journalctl
+## 2.5. Logs — journalctl
 
 systemd centraliza todos los logs en el **journal** (binario, en `/var/log/journal/`).
 
@@ -253,7 +253,7 @@ systemd centraliza todos los logs en el **journal** (binario, en `/var/log/journ
 | Eliminar logs de más de 30 días / reducir a 50 mb | `journalctl --vacuum-time=30d` / `--vacuum-size=50M` |
 
 ---
-## 3.6. Timers — el cron de systemd
+## 2.6. Timers — el cron de systemd
 
 Los timers de systemd sustituyen a cron con más control y logging integrado.
 
@@ -295,7 +295,7 @@ User=backup
 | Ver logs de las ejecuciones            | `journalctl -u backup.service`        |
 
 ---
-## 3.7. cron — el gestor de tareas clásico
+## 2.7. cron — el gestor de tareas clásico
 
 Aunque systemd timers son la alternativa moderna, cron sigue siendo muy usado.
 
