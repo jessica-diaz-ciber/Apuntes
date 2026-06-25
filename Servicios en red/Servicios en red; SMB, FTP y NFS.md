@@ -141,8 +141,8 @@ La comunicación SMB implica una serie de mensajes de petición y respuesta entr
 
 > [!example] Usuarios
 > Samba mantiene su propia base de datos de contraseñas, separada de `/etc/passwd`. El usuario debe existir tanto en Linux como en Samba.
-> 
-> | Acción                                                    | Comando                               |
+
+| Acción                                                    | Comando                               |
 | --------------------------------------------------------- | ------------------------------------- |
 | Crear un usuario Linux-samba nuevo                        | `useradd -M -s /sbin/nologin jessica` |
 | Crear / Habilitar / deshabilitar / eliminar usuario samba | `smbpasswd -a/-e/-d/-x jessica `      |
@@ -151,11 +151,11 @@ La comunicación SMB implica una serie de mensajes de petición y respuesta entr
 
 > [!example] Permisos
 >  Los permisos en Samba tienen **dos capas** que se aplican de forma acumulativa: de entre los permisos del share y los permisos dentro del sistema de ficheros Linux, gana el más restrictivo.
->  ```bash
+```bash
 mkdir -p /srv/samba/{publico,datos,dev}
 chown -R root:root /srv/samba/
 chown -R jessica:jessica /srv/samba/datos && chmod 770 /srv/samba/datos
-> ```
+```
 
 > El servicio samba se llama `smbd` y para ver las sesiones activas podemos usar el comando `smbstatus`
 
@@ -163,18 +163,18 @@ chown -R jessica:jessica /srv/samba/datos && chmod 770 /srv/samba/datos
 ## 1.6. 🖥️ Acceso - clientes SMB
 
 > [!example] `SMBclient` — Acceso interactivo
-> ```bash
+```bash
 smbclient -L //192.168.1.50 -U jessica # Listar shares disponibles en un servidor
 smbclient //192.168.1.50/datos -U jessica # Conectarse a un share interactivamente
 smbclient //192.168.1.50/datos -U jessica -c "ls" # Ejecutar un comando directamente (sin modo interactivo)
 smbclient //192.168.1.50/datos -U jessica --option="client max protocol=SMB3" # Forzar versión SMB concreta
-> ```
-> | Listar archivos | Descargar         | Subir           | Descargar todos | Subir todos  | Crear directorio | Eliminar          |
+```
+| Listar archivos | Descargar         | Subir           | Descargar todos | Subir todos  | Crear directorio | Eliminar          |
 | --------------- | ----------------- | --------------- | --------------- | ------------ | ---------------- | ----------------- |
 | `ls`            | `get archivo.txt` | `put local.txt` | `mget *.txt`    | `mput *.log` | `mkdir carpeta`  | `del archivo.txt` |
 
 > [!example] `SMBMap` 
-> | Comando               | Acción                                                                   |
+| Comando               | Acción                                                                   |
 | --------------------- | ------------------------------------------------------------------------ |
 | Conectarse            | `smbmap -H <ip> -u <user> -p <pass>`                                     |
 | Listar contenido      | `smbmap -H <ip> -u <user> -p <pass> -L`                                  |
@@ -184,7 +184,7 @@ smbclient //192.168.1.50/datos -U jessica --option="client max protocol=SMB3" # 
 | Cmd                   | `smbmap -H <ip> -u <user> -p <pass> -x 'ipconfig'`                       |
 
 > [!example] `mount.cifs` — montar el share en el sistema de archivos
-> | Comando                        | Cmd                                                                          |
+| Comando                        | Cmd                                                                          |
 | ------------------------------ | ---------------------------------------------------------------------------- |
 | Instalar cliente CIFS          | `apt install cifs-utils -y`                                                  |
 | Crear una carpeta para montaje | `mkdir -p /mnt/datos`                                                        |
@@ -195,7 +195,7 @@ smbclient //192.168.1.50/datos -U jessica --option="client max protocol=SMB3" # 
 Desde la GUI en Windows podemos conectarnos facilmente: `Este equipo` → `Conectar a unidad de red` → introducir `\\servidor\share`
 
 > [!example] `cmd` — Desde linea de comandos en Windows
-> | Comando                      | Cmd                                                       |
+| Comando                      | Cmd                                                       |
 | ---------------------------- | --------------------------------------------------------- |
 | Listar shares de un servidor | `net view \\192.168.1.50` / `/all` para shares ocultos    |
 | Conectarse a un share        | `net use Z: \\192.168.1.50\datos /user:jessica MiPass123` |
@@ -215,6 +215,7 @@ Para la enumeración utilizaremos la herramienta netexec
 | Fuerza bruta de contraseña                      | `nxc smb <ip> -u <user> -p <diccionario> --shares`                           |
 | Enumerar usuarios grupos                        | `nxc smb <ip> -u <user> -p <pass> --users/--groups`                          |
 | Probar usuarios con contraseñas                 | `nxc smb <ip> -u <dict_users> -p <dict_pass> --shares --continue-on-success` |
+
 > [!error]+
 > Si al enumerar sale que está SMBv1 activado, es vulnerable a eternalblue, 
 > Si no está firmado `signing:False` es vulnerable a relay, lo podemos confirmar con `nmap --script smb-vuln-ms17-010 <ip>`
@@ -241,6 +242,7 @@ FTP utiliza **dos conexiones TCP separadas**:
 | -------------------- | --------------- | --------------------------------------- |
 | **Canal de control** | puerto 21       | Comandos y respuestas (siempre abierto) |
 | **Canal de datos**   | puerto variable | Transferencia de archivos y listados    |
+
 Esta separación es la causa de los problemas de FTP con firewalls y NAT, y da origen a los dos modos de operación.
 
 ## 2.1. 🔌 Puertos y variantes
@@ -252,12 +254,13 @@ FTP existe en varias versiones:
 | **FTP**            | 21 (control), 20 (datos activo)  | ❌ Ninguno | Texto plano, obsoleto para datos sensibles                       |
 | **FTPS** (FTP-SSL) | 21 (explícito) o 990 (implícito) | ✅ TLS/SSL | FTP con capa TLS. Dos conexiones como FTP                        |
 | **SFTP**           | 22                               | ✅ SSH     | No es FTP real: es SSH File Transfer Protocol. Una sola conexión |
+
 Además permite elegir entre dos modos:
 
 > [!example] Modo activo
 El servidor **inicia** la conexión de datos hacia el cliente. *Es como un cartero que va a la casa del cliente*
-> ```bash
-> Cliente (detrás de NAT/firewall)          Servidor FTP
+```bash
+ Cliente (detrás de NAT/firewall)          Servidor FTP
    │                                         │
    │── TCP SYN → puerto 21 (control) ──────▶ │ 
    │◀─ TCP ACK + bienvenida ─────────────────│
@@ -266,12 +269,12 @@ El servidor **inicia** la conexión de datos hacia el cliente. *Es como un carte
    │   (cliente escucha en puerto 51205)     │  # puerto = 200*256 + 5 = 51205
    │                                         │
    │◀── TCP SYN desde puerto 20 ─────────────│  # servidor inicia conexión
-> ```
+```
 > ⚠️ Como es una conexión entrante hacia el cliente, puede dar problemas detrás de NAT o Firewall
 
 > [!example] Modo pasivo (PASV)
 El cliente **siempre inicia** ambas conexiones.
-> ```bash
+```bash
 Cliente (detrás de NAT/firewall)                 Servidor FTP
    │                                                 │
    │── TCP SYN → puerto 21 (control) ──────────────▶ │ 
@@ -283,7 +286,7 @@ Cliente (detrás de NAT/firewall)                 Servidor FTP
    │── TCP SYN → puerto 50069 ─────────────▶         │ # cliente inicia conexión de datos
    │◀─ TCP ACK ──────────────────────────────────────│ # funciona con firewall
    │   transferencia de datos                        │
-> ```
+```
 
 > [!tip] ¿Cuándo usar cada modo?
 > 
@@ -357,10 +360,10 @@ Los usuarios son usuarios del sistema Linux. Podemos por tanto crear un usuario 
 
 > [!warning] Firewall para Modo pasivo
 > Para pemitir el modo pasivo podemos configurar el firewall permitiendo la conexión de control y la de datos pasivos
-> ```bash
-> sudo ufw allow 21/tcp
-> sudo ufw allow 40000:50000/tcp   # rango pasivo definido en vsftpd.conf
-> ```
+```bash
+sudo ufw allow 21/tcp
+sudo ufw allow 40000:50000/tcp   # rango pasivo definido en vsftpd.conf
+```
 
 > [!tip] Preferir SFTP sobre FTP/FTPS 
 > En la mayoría de casos, **SFTP es preferible**: usa el mismo puerto que SSH (22), no necesita configuración adicional de firewall para el canal de datos, y el cifrado es robusto por defecto. Solo usar FTP/FTPS cuando hay una necesidad específica (clientes legacy, servidores web, etc.).
@@ -371,8 +374,8 @@ Los usuarios son usuarios del sistema Linux. Podemos por tanto crear un usuario 
 > [!example] `ftp` — Cliente ftp básico Linux/Windows
 > Nos conectamos por `ftp <user>@<ip>`
 > - Los comandos son los mismos que en Linux, pero tenemos además estos:
->  
-> | Subir        | Descargar    | Descargar todos | Subir todos  | Crear directorio | Activo/pasivo | Modo binario | Modo texto |
+  
+| Subir        | Descargar    | Descargar todos | Subir todos  | Crear directorio | Activo/pasivo | Modo binario | Modo texto |
 | ------------ | ------------ | --------------- | ------------ | ---------------- | ------------- | ------------ | ---------- |
 | `put <file>` | `put <file>` | `mget *.txt`    | `mput *.log` | `mkdir carpeta`  | `passive`     | `binary`     | `ascii`    |
 
@@ -380,17 +383,17 @@ Los usuarios son usuarios del sistema Linux. Podemos por tanto crear un usuario 
 > Nos conectamos por `sftp -P 2222 <user>@<ip>`. Los comandos son los mismos que en ftp
 
 > [!example] Powershell
-> ```powershell
+```powershell
 $cliente = New-Object System.Net.WebClient
 $cliente.Credentials = New-Object System.Net.NetworkCredential("usuario","contraseña")
 $cliente.DownloadFile("ftp://192.168.1.50/archivo.txt", "C:\local\archivo.txt")
 $cliente.UploadFile("ftp://192.168.1.50/subida.txt", "C:\local\subida.txt") # Subir archivo
-> ```
+```
 
 > [!example] `LFTP` - cliente avanzado
 > Se instala con `sudo apt install lftp -y`. Uso: `lftp -u <user>,<pass> 192.168.1.50`
 > 
-> | Protocolo                             | Puerto                                |
+| Protocolo                             | Puerto                                |
 | ------------------------------------- | ------------------------------------- |
 | Listar con detalle                    | `lftp> ls -la`                        |
 | Sincronizar directorio remoto → local | `lftp> mirror /remoto /local`         |
@@ -400,7 +403,7 @@ $cliente.UploadFile("ftp://192.168.1.50/subida.txt", "C:\local\subida.txt") # Su
 | Deshabilitar verificación SSL (lab)   | `lftp> set ssl:verify-certificate no` |
 
 > [!example] Curl
-> | Acción                   | Comando                                                         |
+| Acción                   | Comando                                                         |
 | ------------------------ | --------------------------------------------------------------- |
 | Listar direcotorio       | `curl ftp://<ip>/archivo.txt --user <user>:<pass> `             |
 | Descar archivo           | `curl ftp://<ip>/archivo.txt --user <user>:<pass> -o local.txt` |
@@ -441,20 +444,22 @@ NFS funciona sobre **RPC (Remote Procedure Call)**. El cliente convierte operaci
 
 > [!example] **NFSv3**
  Usa varios puertos TCP y UDP, permite archivos más grandes y mejor manejo de errores. 
-> ```
+
+```
 Cliente → rpcbind (111)   → "¿en qué puerto está mountd?"   → responde: 20048
 Cliente → mountd  (20048) → "quiero montar /srv/datos"      → responde: file handle raíz
 Cliente → nfsd    (2049)  → LOOKUP "archivo.txt" (fh raíz)  → responde: file handle del archivo
 Cliente → nfsd    (2049)  → READ   (file handle, offset, n) → responde: datos
-> ```
+```
+
 >> Cada operación es una petición RPC separada. El `file handle` es la referencia opaca que identifica cada archivo o directorio en el servidor; el cliente lo guarda y lo usa en todas las operaciones posteriores.
 
 > [!example] **NFSv4.X**
  Utiliza las ACLs de los archivos, guarda estado y permite autenticación Kerberos. Todo ocurre en una sola conexión a `nfsd (2049)` gracias a la operación **COMPOUND**, que agrupa múltiples llamadas en un único paquete:
->```
-> Cliente: COMPOUND                                                               Servidor: COMPOUND response 
-> [PUTROOTFH → LOOKUP "srv" → LOOKUP "datos" → OPEN "archivo.txt" → READ]    →    Todo de una vez
-> ```
+```
+ Cliente: COMPOUND                                                               Servidor: COMPOUND response 
+ [PUTROOTFH → LOOKUP "srv" → LOOKUP "datos" → OPEN "archivo.txt" → READ]    →    Todo de una vez
+```
 > > Esto reduce drásticamente la latencia frente a NFSv3, especialmente en redes lentas o con muchos archivos pequeños. Para navegar los exports, NFSv4 usa el **PseudoFS**: un sistema de archivos virtual que conecta todos los exports en un árbol navegable desde `/`, sin necesitar mountd.
 
 ---
