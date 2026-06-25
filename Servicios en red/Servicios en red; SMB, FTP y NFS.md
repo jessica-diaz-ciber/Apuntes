@@ -396,7 +396,7 @@ $cliente.UploadFile("ftp://192.168.1.50/subida.txt", "C:\local\subida.txt") # Su
 
 > [!example] `LFTP` - cliente avanzado
 > Se instala con `sudo apt install lftp -y`. Uso: `lftp -u <user>,<pass> 192.168.1.50`
-> 
+
 | Protocolo                             | Puerto                                |
 | ------------------------------------- | ------------------------------------- |
 | Listar con detalle                    | `lftp> ls -la`                        |
@@ -407,6 +407,7 @@ $cliente.UploadFile("ftp://192.168.1.50/subida.txt", "C:\local\subida.txt") # Su
 | Deshabilitar verificación SSL (lab)   | `lftp> set ssl:verify-certificate no` |
 
 > [!example] Curl
+
 | Acción                   | Comando                                                         |
 | ------------------------ | --------------------------------------------------------------- |
 | Listar direcotorio       | `curl ftp://<ip>/archivo.txt --user <user>:<pass> `             |
