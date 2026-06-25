@@ -169,11 +169,13 @@ smbclient //192.168.1.50/datos -U jessica # Conectarse a un share interactivamen
 smbclient //192.168.1.50/datos -U jessica -c "ls" # Ejecutar un comando directamente (sin modo interactivo)
 smbclient //192.168.1.50/datos -U jessica --option="client max protocol=SMB3" # Forzar versión SMB concreta
 ```
+
 | Listar archivos | Descargar         | Subir           | Descargar todos | Subir todos  | Crear directorio | Eliminar          |
 | --------------- | ----------------- | --------------- | --------------- | ------------ | ---------------- | ----------------- |
 | `ls`            | `get archivo.txt` | `put local.txt` | `mget *.txt`    | `mput *.log` | `mkdir carpeta`  | `del archivo.txt` |
 
-> [!example] `SMBMap` 
+> [!example] `SMBMap`
+
 | Comando               | Acción                                                                   |
 | --------------------- | ------------------------------------------------------------------------ |
 | Conectarse            | `smbmap -H <ip> -u <user> -p <pass>`                                     |
@@ -184,6 +186,7 @@ smbclient //192.168.1.50/datos -U jessica --option="client max protocol=SMB3" # 
 | Cmd                   | `smbmap -H <ip> -u <user> -p <pass> -x 'ipconfig'`                       |
 
 > [!example] `mount.cifs` — montar el share en el sistema de archivos
+
 | Comando                        | Cmd                                                                          |
 | ------------------------------ | ---------------------------------------------------------------------------- |
 | Instalar cliente CIFS          | `apt install cifs-utils -y`                                                  |
@@ -195,6 +198,7 @@ smbclient //192.168.1.50/datos -U jessica --option="client max protocol=SMB3" # 
 Desde la GUI en Windows podemos conectarnos facilmente: `Este equipo` → `Conectar a unidad de red` → introducir `\\servidor\share`
 
 > [!example] `cmd` — Desde linea de comandos en Windows
+
 | Comando                      | Cmd                                                       |
 | ---------------------------- | --------------------------------------------------------- |
 | Listar shares de un servidor | `net view \\192.168.1.50` / `/all` para shares ocultos    |
