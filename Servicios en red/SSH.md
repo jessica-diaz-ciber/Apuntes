@@ -146,45 +146,47 @@ SSH permite crear túneles cifrados para redirigir tráfico. Es una de las funci
 
 > [!example] Local Port Forwarding
 Redirige un puerto local hacia un destino accesible desde el servidor SSH. Esto permite por ejemplo acceder a un servicio interno que está abierto exclusivamente en el localhost. 
-> ```bash
-> # ssh -L [IP_local:]puerto_local:host_destino:puerto_destino usuario@servidor_SSH
-> ssh -L 3307:localhost:3306 jessica@servidor # Ahora: mysql -h 127.0.0.1 -P 3307 → conecta al MySQL del servidor
-> ```
+```bash
+# ssh -L [IP_local:]puerto_local:host_destino:puerto_destino usuario@servidor_SSH
+ssh -L 3307:localhost:3306 jessica@servidor # Ahora: mysql -h 127.0.0.1 -P 3307 → conecta al MySQL del servidor
+```
 
 > [!example] Remote Port Forwarding
 Expone un puerto local del cliente como puerto del servidor. Útil para recibir conexiones desde dentro de una red restrictiva.
-> ```bash
+```bash
 ssh -R 8080:localhost:80 jessica@servidor # Exponer el puerto 80 local en el puerto 8080 del servidor
-> # Desde el servidor: curl http://localhost:8080 → llega al puerto 80 del cliente
-> ```
+# Desde el servidor: curl http://localhost:8080 → llega al puerto 80 del cliente
+```
 
 > [!example] Dynamic Port Forwarding
-Crea un proxy SOCKS local que enruta todo el tráfico a través del servidor SSH.
-> ```bash
-> ssh -D 1080 jessica@servidor # Crear proxy SOCKS5 en el puerto 1080
-> # Configurar el navegador o proxychains para usar 127.0.0.1:1080 → todo el tráfico sale desde el servidor SSH
-> proxychains nmap -sT 10.0.0.0/24 # Con proxychains
-> ```
 
-> [!warning] Port Forwarding y escalada de privilegios 
-> El port forwarding es una herramienta de pivoting fundamental en pentesting. Si se compromete un servidor SSH con forwarding habilitado, se puede usar para alcanzar redes internas inaccesibles directamente.
+Crea un proxy SOCKS local que enruta todo el tráfico a través del servidor SSH.
+```bash
+ssh -D 1080 jessica@servidor # Crear proxy SOCKS5 en el puerto 1080
+# Configurar el navegador o proxychains para usar 127.0.0.1:1080 → todo el tráfico sale desde el servidor SSH
+proxychains nmap -sT 10.0.0.0/24 # Con proxychains
+```
+
+> [!warning] Port Forwarding y escalada de privilegios
+El port forwarding es una herramienta de pivoting fundamental en pentesting. Si se compromete un servidor SSH con forwarding habilitado, se puede usar para alcanzar redes internas inaccesibles directamente.
 
 ---
 ## 1.5. 🚨 Vulnerabilidades y vectores de ataque
 
 > [!error] Fuerza bruta de credenciales
+
 El vector más común. Si `PasswordAuthentication yes` está activo y no hay protección:
-> ```bash
-> hydra -l <usuario> -P passwords.txt ssh://<ip> -t 4
-> nxc <protocolo> <ip> -u <usuario> -p <contraseña> <opciones>
-> ```
+```bash
+hydra -l <usuario> -P passwords.txt ssh://<ip> -t 4
+nxc <protocolo> <ip> -u <usuario> -p <contraseña> <opciones>
+```
 
 > [!error] Clave privada expuesta 
 Si una clave privada está en un lugar accesible (backup, repositorio git, home mal configurado):
-> ```bash
-> trufflehog git file://./repositorio
+```bash
+trufflehog git file://./repositorio
 gitleaks detect --source .
-> ```
+```
 > Para evitarlo, siempre hay que proteger la clave privada con una passfrase
 
 Luego tenemos los CVEs de versiones antiguas de SSH
@@ -198,10 +200,10 @@ Luego tenemos los CVEs de versiones antiguas de SSH
 |**CVE-2016-6515**|OpenSSH < 7.4|DoS por CPU con contraseñas muy largas en servidores con PasswordAuth|
 
 > [!warning] Username enumeration CVE-2018-15473 
-> Algunas versiones de OpenSSH permitían determinar si un usuario existe en el sistema basándose en diferencias de tiempo en la respuesta de autenticación. Versiones previas a OpenSSH 7.7 dan respuestas diferentes para usuarios existentes vs no existentes
-> ```bash
-> ssh-audit 192.168.1.50          # auditoría general
-> ```
+Algunas versiones de OpenSSH permitían determinar si un usuario existe en el sistema basándose en diferencias de tiempo en la respuesta de autenticación. Versiones previas a OpenSSH 7.7 dan respuestas diferentes para usuarios existentes vs no existentes
+```bash
+ssh-audit 192.168.1.50          # auditoría general
+```
 
 ---
 ## 🔗 Ver también
