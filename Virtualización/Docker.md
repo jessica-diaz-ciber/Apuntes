@@ -295,12 +295,13 @@ Para evitar la pérdida de datos (por ejemplo bases de datos), Docker proporcion
 | Listar los volúmenes          | `docker volume ls`              |
 | Ver información de un volumen | `docker volume inspect db_data` |
 | Eliminar un volumen           | `docker volume rm db_data`      |
+
 Por tanto podemos crear un contenedor con ese volumen. Por ejemplo usaremos un volumen que se llame "**db_data**" y que hayamos creado previamente:
 ```bash
 docker run -dit -e MYSQL_ROOT_PASSWORD=asdfg -p 3306:3306 -v db_data:/var/lib/mysql mysql:8.0 
 ```
 
-Por tanto **si el contenedor se elimina y se crea otro usando el mismo volumen, los datos se conservan**.
+> ⚠️ Si el contenedor se elimina y se crea otro usando el mismo volumen, los datos se conservan
 
 #### Los commits
 Docker permite crear una imagen a partir del estado actual de un contenedor mediante
