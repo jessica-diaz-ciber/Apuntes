@@ -73,6 +73,7 @@ Una imagen Docker está compuesta por capas, y cada una cumple una función conc
 #### Como se crean las capas 
 
 Cuando se construye una imagen Docker, esta se crea por capas y cada instrucción del Dockerfile genera una capa nueva. Al crear nuevas versiones de una capa, docker cachea las capas que no se han cambiado, por tanto en la build solo se generan las capas modificadas. Por ello es util:
+
 - **Excluir los archivos necesarios con** `.dockerignore`: No sirve eliminarlos despues, si ya están en una capa previa, siguen ocupando espacio (en la caché).
 - **Ordenar el Dockerfile, poniendo primero las instrucciones que cambian poco**, como la instalación de dependencias. Dejamos para el final las que cambian con frecuencia como el código fuente
 - **Agrupar comandos relacionados en una misma instrucción**, para reducir al máximo el número de capas generadas, eliminando las innecesarias y produciendo imágenes más eficientes y mantenibles. 
@@ -84,8 +85,8 @@ Todas estas capas se almacenan en la ruta: `/var/lib/docker/overlay2/` y son:
 
 | Tipo          | Descripción                                                                                                                                                                                                                                 |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ** LowerDir** | Agrupa las capas de la imagen y es **de solo lectura**. Contiene las capas que forman la imagen base, generadas a partir del Dockerfile, y almacena el sistema de archivos original, que no se modifica durante la ejecución del contenedor |
-| ** UpperDir** | Es la **capa de escritura del contenedor** y guarda todos los cambios respecto al estado inicial. Cuando se modifica un archivo, Docker aplica copy-on-write, copiándolo a esta capa y manteniendo intactas las LowerDir                    |
+| **LowerDir** | Agrupa las capas de la imagen y es **de solo lectura**. Contiene las capas que forman la imagen base, generadas a partir del Dockerfile, y almacena el sistema de archivos original, que no se modifica durante la ejecución del contenedor |
+| **UpperDir** | Es la **capa de escritura del contenedor** y guarda todos los cambios respecto al estado inicial. Cuando se modifica un archivo, Docker aplica copy-on-write, copiándolo a esta capa y manteniendo intactas las LowerDir                    |
 | **MergedDir** | Existe únicamente mientras el contenedor está activo y ofrece una vista unificada de LowerDir y UpperDir, de modo que el contenedor percibe un único sistema de archivos                                                                    |
 | **WorkDir**   | Es un directorio interno necesario para el funcionamiento de overlayfs, utilizado por Docker para operaciones técnicas, pero no visible ni accesible desde el contenedor                                                                    |
 
@@ -101,6 +102,7 @@ Primero, descargamos una imagen de docker como alpine, o mysql, la que necesitem
 | Listar solo el ID de las imagenes descargadas (útil para scripting) | `docker images -q`                             |
 | Eliminar una imagen                                                 | `docker rmi <imagen>:<version>`                |
 | Borrar todas las imágenes                                           | `docker rmi -f $(docker images -q)`            |
+
 > **Imágenes dangling:** Las imágenes dangling son imágenes sin etiqueta (tag), que suelen generarse al sobrescribir una imagen existente durante un build o cuando el proceso falla, y pueden eliminarse con `docker image prune`. Luego con `docker system prune` eliminamos imagenes dangling, contenedores parados, redes sin usar y caché, recuperando bastante espacio
 
 ---
@@ -116,6 +118,7 @@ Ahora, ya teniendo la imagen descargada, podemos hacer un `docker run` para cr
 | Configurar una variable de entorno                                                            | `docker run (...) -e 'PASS=pass123` |
 | Crear un contenedor con nombre, en lugar que se le ponga uno aleatorio                        | `docker run (...) --name=<nombre>`  |
 | Crear contenedores de pruebas que se eliminen al salir de ellos o pararlos                    | `docker run (...) --rm`             |
+
 > El contenedor en segundo plano permite que nos podamos conectar a él y salir cuando queramos
 
 Una vez que tenemos creado un contenedor:
@@ -128,6 +131,7 @@ Una vez que tenemos creado un contenedor:
 | Ejecutar comandos en el contenedor                       | `docker exec it <contenedor> <comando>` |
 | Parar un contenedor                                      | `docker stop <contenedor>`              |
 | Eliminar un contenedor parado                            | `docker rm <contenedor>`                |
+
 Podemos copiar archivos del contenedor al host y viceversa con `docker cp`. Aun así lo más eficiente es crear la carpeta compartida con `docker run -v`.
 
 | Acción                            | Comando                                                          |
