@@ -1,19 +1,3 @@
-# Índice
-
-> [!NOTE] xd
-> Useful information that users should know, even when skimming content.
-
-> [!TIP] xd
-> Helpful advice for doing things better or more easily.
-
-> [!IMPORTANT]
-> Key information users need to know to achieve their goal.
-
-> [!WARNING]
-> Urgent info that needs immediate user attention to avoid problems.
-
-> [!CAUTION]
-> Advises about risks or negative outcomes of certain actions.
 
 [[Windows; Escalada de privilegios#1. 🥔 Ataques Potato e Impersonación]]
 - [[Windows; Escalada de privilegios#1.1. JuicyPotato (2018) - Windows 2007 - 2016]]
