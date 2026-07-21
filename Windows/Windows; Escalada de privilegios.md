@@ -34,7 +34,7 @@
 
 # 1. 🥔 Ataques Potato e Impersonación
 
-> [!info] Fundamento común
+> [!NOTE] Fundamento común
 >  Las cuentas de servicio como `IIS AppPool\DefaultAppPool` o `NT SERVICE\MSSQLSERVER` tienen `SeImpersonatePrivilege` por diseño. Este privilegio permite a un proceso **usar el token de otro usuario** que se conecte a él. 
 >  
 >  En los ataques Potato, el atacante manda crear un objeto COM privilegiado, que expone métodos por RPC/DCOM. Al invocar uno de esos métodos, el servicio COM se autentica via NTLM y responde, pero el atacante lo redirige  a una named pipe propia (o listener RPC/local). Gracias a la impersonación, el atacante consigue un token de SYSTEM y lo aprovecha para lanzar un proceso privilegiado
