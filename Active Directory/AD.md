@@ -18,6 +18,7 @@ El AD se basa en un servidor llamado **DC (Controlador de Dominio)**, que se enc
 | **636**         | **LDAPS**          | LDAP cifrado sobre TLS                                                                                           |
 | **3268 / 3269** | **Global Catalog** | Consultas al Catálogo Global (sin cifrar / con TLS)                                                              |
 
+> [!NOTE] 
 > 🔁 No existe un solo DC sino varios, réplicas que comparten información a tiempo real para evitar perder el acceso a servicios si uno de ellos es atacado e inutilizado. El proceso de replicación se realiza de manera automática y se pueden gestionar como un solo DC.
 
 ---
