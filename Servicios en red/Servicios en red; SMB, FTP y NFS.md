@@ -1,5 +1,6 @@
 # 1. SMB - Server Message Block
 
+> [!NOTE]
 > **SMB (Server Message Block)** es el protocolo de red de Microsoft para compartir archivos, impresoras e IPC entre equipos. Es la columna vertebral del almacenamiento compartido en entornos Windows y Active Directory, implementado en Linux mediante **Samba**. 
 
 ## 1.1. 🔌 Puertos y transporte
@@ -12,6 +13,7 @@ SMB ha evolucionado significativamente desde sus orígenes en IBM en los años 8
 | **SMB 2.0**        | Vista / Server 2008  | Menos comandos (100→20), paquetes más grandes, pipelining | ⚠️ Legacy                             |
 | **SMB 3.0**        | Win 8 / Server 2012  | Cifrado E2E, Multichannel, SMB Direct (RDMA)              | ✅ Actual                              |
 | **SMB 3.1.1**      | Win 10 / Server 2016 | AES-256 (desde Win 11/Server 2022), pre-auth integrity    | ✅ Recomendado                         |
+
 > [!NOTE] 
 > **CIFS vs SMB CIFS:** (Common Internet File System) es simplemente el nombre que recibió SMB 1 cuando Microsoft lo documentó públicamente en los 90. En la práctica, "CIFS" y "SMB 1" son lo mismo. El término CIFS sigue usándose en Linux para referirse al cliente SMB en general (`mount -t cifs`), pero el protocolo que usa es el moderno
 
@@ -24,17 +26,18 @@ SMB ha evolucionado significativamente desde sus orígenes en IBM en los años 8
 La comunicación SMB implica una serie de mensajes de petición y respuesta entre cliente y servidor:
 
 1️⃣ **Negotiate:** el cliente inicia la comunicación SMB indicando qué versiones del protocolo soporta y el servidor elige cuál van a utilizar ambos durante la conexión. También se acuerdan características de seguridad y funcionamiento: el cifrado, la firma o los tamaños máximos de datos que se pueden enviar.
-|
+
 2️⃣ **Session Setup:** El cliente se autentica frente al servidor mediante NTLM o Kerberos. Si la autenticación es válida, el servidor crea la sesión SMB y le asigna un identificador único (`SessionID`).
-|
+
 3️⃣ **Tree Connect:** El cliente solicita acceso a una carpeta compartida y el servidor devuelve un identificador del recurso (`TreeID`) junto con el tipo de recurso y los permisos disponibles.
-|
+
 4️⃣ **File Operations:** El cliente por tanto puede interactuar con archivos y carpetas. Para ello envía peticiones SMB para abrir archivos (`CREATE`), leer contenido (`READ`), escribir datos (`WRITE`) o cerrar archivos (`CLOSE`), utilizando identificadores (`FileId`) que el servidor asigna a cada archivo abierto.
 
 > [!CAUTION]
 > NTLM Relay sobre SMB: Cuando un cliente autentica por NTLM sobre SMB, un atacante con Responder puede capturar el challenge-response y reenviarlo a otro servidor (NTLM Relay). El atacante nunca ve la contraseña pero puede autenticarse en nombre de la víctima. 
 >  **Mitigación**: habilitar **SMB Signing** (requerido en DCs, opcional en el resto): 
 
+--------
 ## 1.3. Tipos de shares
 
 | ShareType            | Descripción                                                    | Ruta UNC          |
@@ -44,10 +47,11 @@ La comunicación SMB implica una serie de mensajes de petición y respuesta entr
 | **PRINT**            | Impresora compartida                                           | `\\srv\impresora` |
 | `C$`, `D$`, `ADMIN$` | Shares administrativos ocultos (solo admins)                   | `\\srv\C$`        |
 | **SYSVOL**           | La carpeta SYSVOL tiene el archivo Groups.xml con credenciales | `\\srv\SYSVOL`    |
-> [!info] 
+
+> [!INFO] 
 > El share invisible más importante `IPC$` es un share especial que no comparte archivos sino named pipes para RPC. Casi todas las operaciones administrativas remotas (gestión de servicios, usuarios, tareas...) pasan por `IPC$`. Es accesible incluso con sesión nula (`-N`) en configuraciones poco seguras, lo que permite enumerar usuarios y shares sin autenticarse.
 
----
+--------
 ## 1.4. 🖥️ Configuración en Windows
 
 - **Desde GUI**
@@ -67,7 +71,7 @@ Clic derecho en carpeta 🡆 Propiedades 🡆 Compartir 🡆 Uso compartido avan
 | Habilitar la firma       | `Set-SmbServerConfiguration -RequireSecuritySignature $true`                                   |
 | Habilitar cifrado smb    | `Set-SmbServerConfiguration -EncryptData $true -Force`                                         |
 
----
+--------
 ## 1.5. 🖥️ Configuración en Linux (Samba)
 
 **Samba** es la implementación de SMB para Linux/Unix. Permite que un sistema Linux actúe como servidor de archivos Windows.
@@ -118,7 +122,7 @@ Clic derecho en carpeta 🡆 Propiedades 🡆 Compartir 🡆 Uso compartido avan
     directory mask = 0775          # permisos de carpetas nuevas
 ```
 
-
+----------
 #### Usuarios
 Samba mantiene su propia base de datos de contraseñas, separada de `/etc/passwd`. El usuario debe existir tanto en Linux como en Samba.
 
@@ -128,6 +132,8 @@ Samba mantiene su propia base de datos de contraseñas, separada de `/etc/passwd
 | Crear / Habilitar / deshabilitar / eliminar usuario samba | `smbpasswd -a/-e/-d/-x jessica `      |
 | Cambiar su contraseña                                     | `smbpasswd jessica`                   |
 | Listar usuarios samba                                     | `pdbedit -Lv `                        |
+
+----------
 #### Permisos
  Los permisos en Samba tienen **dos capas** que se aplican de forma acumulativa: de entre los permisos del share y los permisos dentro del sistema de ficheros Linux, gana el más restrictivo.
 ```bash
@@ -138,7 +144,7 @@ chown -R jessica:jessica /srv/samba/datos && chmod 770 /srv/samba/datos
 
 > El servicio samba se llama `smbd` y para ver las sesiones activas podemos usar el comando `smbstatus`
 
----
+----------
 ## 1.6. 🖥️ Acceso - clientes SMB
 
 #### SMBclient
@@ -154,6 +160,7 @@ smbclient //192.168.1.50/datos -U jessica --option="client max protocol=SMB3" # 
 | --------------- | ----------------- | --------------- | --------------- | ------------ | ---------------- | ----------------- |
 | `ls`            | `get archivo.txt` | `put local.txt` | `mget *.txt`    | `mput *.log` | `mkdir carpeta`  | `del archivo.txt` |
 
+----------
 #### SMBMap
 
 | Comando               | Acción                                                                   |
@@ -165,6 +172,7 @@ smbclient //192.168.1.50/datos -U jessica --option="client max protocol=SMB3" # 
 | Subir un archivo      | `smbmap -H <ip> -u <user> -p <pass> --upload ./file.txt Shares/file.txt` |
 | Cmd                   | `smbmap -H <ip> -u <user> -p <pass> -x 'ipconfig'`                       |
 
+----------
 #### mount.cifs
 Montar el share en el sistema de archivos
 
@@ -178,6 +186,7 @@ Montar el share en el sistema de archivos
 
 Desde la GUI en Windows podemos conectarnos facilmente: `Este equipo` → `Conectar a unidad de red` → introducir `\\servidor\share`
 
+----------
 #### cmd
 Desde linea de comandos en Windows:
 
@@ -201,6 +210,7 @@ Para la enumeración utilizaremos la herramienta netexec
 | Fuerza bruta de contraseña                      | `nxc smb <ip> -u <user> -p <diccionario> --shares`                           |
 | Enumerar usuarios grupos                        | `nxc smb <ip> -u <user> -p <pass> --users/--groups`                          |
 | Probar usuarios con contraseñas                 | `nxc smb <ip> -u <dict_users> -p <dict_pass> --shares --continue-on-success` |
+
 > [!CAUTION]
 > Si al enumerar sale que está SMBv1 activado, es vulnerable a **eternalblue**, 
 > Si no está firmado `signing:False` es vulnerable a **relay**, lo podemos confirmar con `nmap --script smb-vuln-ms17-010 <ip>`
@@ -210,13 +220,16 @@ Podemos transferir archivos con Linux montando un servidor impacket: `sudo impac
 > [!WARNING] 
 > Obtener una shell:
 > **WINRM:** Si al enumerar con `nxc winrm` nuestro usuario sale `(Pwn3d!)`  → `evil-winrm -i <ip> -u <user> -p <pass>`
+> 
 > **SMB**: Si al enumerar con `nxc smb` nuestro usuario sale `(Pwn3d!)`  → `impacket-psexec WORGROUP/<user>@<ip> cmd.exe`
+> 
 > Pass the hash: Podemos utilizar un hash NTLM que no podamos romper: `nxc smb 10.10.20.20 -u 'Administrator' -H hash`
 
  
 ---
 # 2. 📤 FTP — File Transfer Protocol
 
+> [!NOTE] 
 > FTP permite la transferencia de archivos entre un cliente y un servidor. A diferencia de NFS (que monta el sistema de archivos), FTP requiere que el usuario **descargue o suba** archivos explícitamente. Desarrollado en 1971, es uno de los protocolos más antiguos de Internet.
 
 FTP utiliza **dos conexiones TCP separadas**:
@@ -225,6 +238,7 @@ FTP utiliza **dos conexiones TCP separadas**:
 | -------------------- | --------------- | --------------------------------------- |
 | **Canal de control** | puerto 21       | Comandos y respuestas (siempre abierto) |
 | **Canal de datos**   | puerto variable | Transferencia de archivos y listados    |
+
 Esta separación es la causa de los problemas de FTP con firewalls y NAT, y da origen a los dos modos de operación.
 
 --------------
@@ -237,10 +251,12 @@ FTP existe en varias versiones:
 | **FTP**            | 21 (control), 20 (datos activo)  | ❌ Ninguno | Texto plano, obsoleto para datos sensibles                       |
 | **FTPS** (FTP-SSL) | 21 (explícito) o 990 (implícito) | ✅ TLS/SSL | FTP con capa TLS. Dos conexiones como FTP                        |
 | **SFTP**           | 22                               | ✅ SSH     | No es FTP real: es SSH File Transfer Protocol. Una sola conexión |
+
 Además permite elegir entre dos modos:
 - ◀ **Modo pasivo**: siempre que el cliente esté detrás de NAT o firewall (la mayoría de casos modernos)
 - ▶ **Modo activo**: solo en redes internas controladas donde el servidor pueda alcanzar al cliente
 
+-----------
 #### Modo activo
 El servidor **inicia** la conexión de datos hacia el cliente. *Es como un cartero que va a la casa del cliente*
 
@@ -257,7 +273,7 @@ Cliente (detrás de NAT/firewall)          Servidor FTP
    │                                         │
    │◀── TCP SYN desde puerto 20 ─────────────│  # servidor inicia conexión
 ```
-
+-----------
 #### Modo pasivo (PASV)
 El cliente **siempre inicia** ambas conexiones.
 
@@ -330,6 +346,7 @@ sudo ufw allow 40000:50000/tcp   # rango pasivo definido en vsftpd.conf
 
 > En la mayoría de casos, **SFTP es preferible**: usa el mismo puerto que SSH (22), no necesita configuración adicional de firewall para el canal de datos, y el cifrado es robusto por defecto. Solo usar FTP/FTPS cuando hay una necesidad específica (clientes legacy, servidores web, etc.).
 
+-------
 #### FTPS
 Para FTPS añadimos este contenido al fichero
 ```bash
@@ -358,11 +375,13 @@ Cliente ftp básico Linux/Windows. Nos conectamos por `ftp <user>@<ip>`. Los com
 | Subir        | Descargar    | Descargar todos | Subir todos  | Crear directorio | Activo/pasivo | Modo binario | Modo texto |
 | ------------ | ------------ | --------------- | ------------ | ---------------- | ------------- | ------------ | ---------- |
 | `put <file>` | `put <file>` | `mget *.txt`    | `mput *.log` | `mkdir carpeta`  | `passive`     | `binary`     | `ascii`    |
+
 > **sftp**: Cliente ftp ssl. Nos conectamos por `sftp -P 2222 <user>@<ip>`. Los comandos son los mismos que en ftp
 
 > [!NOTE]
 > Si ponemos `debug` podemos ver los comandos que se mandan por detras
 
+-------
 #### Powershell
 ```powershell
 $cliente = New-Object System.Net.WebClient
@@ -371,7 +390,7 @@ $cliente.DownloadFile("ftp://192.168.1.50/archivo.txt", "C:\local\archivo.txt")
 $cliente.UploadFile("ftp://192.168.1.50/subida.txt", "C:\local\subida.txt") # Subir archivo
 ```
 
-
+----------
 #### LFTP
 Cliente avanzado. Se instala con `sudo apt install lftp -y`. Uso: `lftp -u <user>,<pass> 192.168.1.50`
 
@@ -384,6 +403,7 @@ Cliente avanzado. Se instala con `sudo apt install lftp -y`. Uso: `lftp -u <user
 | Forzar modo pasivo                    | `lftp> set ftp:passive-mode on`       |
 | Deshabilitar verificación SSL (lab)   | `lftp> set ssl:verify-certificate no` |
 
+-----------
 #### Curl
 | Acción                   | Comando                                                         |
 | ------------------------ | --------------------------------------------------------------- |
@@ -399,7 +419,6 @@ Cliente avanzado. Se instala con `sudo apt install lftp -y`. Uso: `lftp -u <user
 ## 2.4. Ataques y fuerza bruta
 
 - Para la fuerza bruta podemos usar hydra: `hydra -L <diccionario.txt> -u <usuario> ftp <ip>`
-
 
 
 ---
@@ -426,6 +445,7 @@ NFS funciona sobre **RPC (Remote Procedure Call)**. El cliente convierte operaci
 
 - **NFSv2**: Está obsoleto, permite solo archivos de menos de 2GB y no mantiene estado. Funciona solo por UDP
 
+---------
 #### NFSv3
  Usa varios puertos TCP y UDP, permite archivos más grandes y mejor manejo de errores. 
 ```
@@ -437,6 +457,7 @@ Cliente → nfsd    (2049)  → READ   (file handle, offset, n) → responde: da
 
 > Cada operación es una petición RPC separada. El `file handle` es la referencia opaca que identifica cada archivo o directorio en el servidor; el cliente lo guarda y lo usa en todas las operaciones posteriores.
 
+-------------
 #### NFSv4.x
 Utiliza las ACLs de los archivos, guarda estado y permite autenticación Kerberos. Todo ocurre en una sola conexión a `nfsd (2049)` gracias a la operación **COMPOUND**, que agrupa múltiples llamadas en un único paquete:
 
@@ -468,11 +489,13 @@ Las opciones son estas:
 | Root local (UID 0) → root remoto                    | `no_root_squash` | Root (UID 0) → nobody                            | `root_squash`      |
 | Conserva los UIDs del cliente salvo root            | `no_all_squash`  | Todos → nobody                                   | `all_sqash`        |
 | Habilita comprobación de árbol                      | `subtree_check`  | Evitar errores con renombrados                   | `no_subtree_check` |
+
 Para la autenticación podemos usar estas opciones
 
 | `sec=sys`                                      | `sec=krb5`                      | `sec=krb5i`                                | `sec=krb5p`                     |
 | ---------------------------------------------- | ------------------------------- | ------------------------------------------ | ------------------------------- |
 | Confía en el UID/GID del cliente (sin cifrado) | Kerberos — identidad verificada | Kerberos + integridad (firma cada paquete) | Kerberos + integridad y cifrado |
+
 Ejemplos:
 ```bash
 /srv/publico     *(ro,sync,no_subtree_check) # Acceso para cualquier host (solo en laboratorio)
@@ -546,6 +569,7 @@ Si un export tiene `no_root_squash`, el root del cliente tiene root en el servid
  
 > Por tanto en el servidor podemos comprobar si hay exports con este permiso `sudo exportfs -v | grep no_root_squash`
 
+--------------
 #### 3.4.2. Confianza ciega en el UID del cliente
 
 Con `sec=sys` (el default), NFS confía en el UID que declara el cliente sin verificarlo. Un atacante puede crear un usuario local con el mismo UID que un usuario del servidor y acceder a sus archivos.
@@ -554,7 +578,7 @@ Con `sec=sys` (el default), NFS confía en el UID que declara el cliente sin ver
 
 > Para evitarlo podemos usar autenticación kerberos o `all_squash + anonuid` para que todos los usuarios se mapeen a una cuenta de solo lectura.
 
-
+--------------
 > [!TIP] 
 > Tips de hardening: Aparte de `root_squash` o evitar la confianza ciega en el UID:
 > ⚠️No permitir que cualquier cliente se conecte: Ej `/srv/datos *(rw,sync)`
