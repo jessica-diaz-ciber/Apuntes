@@ -46,18 +46,22 @@ La cadena de peticiones DNS se conforma por este orden
 5️⃣ El `Authoritative Server` es el propietario del dominio y resolverá la IP, que se cacheará en el cliente durante un tiempo limitado (segundos indicados en el "TTL")  `www.ejemplo.com. 300 IN A 93.184.216.34`
 
 > [!INFO]
+> 
 > **Root server** — la raíz del sistema
 > Existen 13 grupos de Root Servers, identificados con letras de la  `A` a la `M` (`a.root-servers.net` a `m.root-servers.net`). Son el punto de partida de cualquier resolución. No conocen las IPs, pero saben que servidores gestionan cada TLD del mundo. Por ejemplo, para el TLD `es` se pregunta al TLD nameserver `a.nic.es`. Fisicamente hay miles de instancias de estos servidores distribuidas por todo el mundo, mediante **anycast**: la misma IP enruta a la instancia más cercana geográficamente.
 
 > [!INFO]
+> 
 > **TLD Nameserver** — los servidores de dominio de nivel superior
 > Gestionan un TLD concreto (`.com`, `.org`, `.net`, `.es`...). No conocen las IPs de los dominios, pero conocen a que Authoritative Nameserver hacerle la petición para cada dominio registrado bajo ese TLD. Por ejemplo para`google serían` serían `ns1.google.com, ns2.google.com...`. Cuando se registra un dominio con por ejemplo GoDaddy, se notifica al operador del TLD los nameservers del dominio.
 
 > [!INFO]
+> 
 > **Authoritative Nameservers** — los servidores del dominio
 > Son los servidores que tienen la **respuesta definitiva** para un dominio concreto. Gestionan la **zona DNS** del dominio con todos sus registros (A, MX, TXT, CNAME...). Cuando un authoritative nameserver responde, incluye el flag `aa` (Authoritative Answer) en la cabecera DNS. Esa respuesta es la fuente de verdad, no viene de caché.
 
 > [!NOTE]
+> 
 > **Recursive Resolver** — el intermediario
 > También llamado **full-service resolver** o **recursive nameserver**. Es el servidor DNS que usan los clientes (el de tu router, `8.8.8.8` de Google, `1.1.1.1` de Cloudflare). Su trabajo es recibir la consulta del cliente, preguntar a los root servers, TLD servers y authoritative servers hasta obtener la respuesta, cachearla durante el TTL y devolver el resultado al cliente. El cliente hace **una sola consulta** al resolver y recibe la respuesta. El resolver hace todo el trabajo de navegar la jerarquía.
 
