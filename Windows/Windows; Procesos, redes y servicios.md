@@ -126,9 +126,11 @@ Si bajamos un nivel, COM se apoya en RPC:
 Ees el mecanismo que realmente ejecuta las llamadas entre procesos.  A ojos del usuario, es como si hubiera ocurrido todo en el propio programa o la propia máquina
 
 Cuando un cliente invoca un método de un objeto COM, esa llamada se transforma en una petición RPC:
-1. El proxy (lado cliente) contacta con el **RPC Endpoint Mapper** del servidor en el puerto TCP/135 para localizar el endpoint donde escucha el servidor COM. El Endpoint Mapper responde con un endpoint RPC válido (por ejemplo un puerto dinámico, una named pipe o un endpoint ALPC).
-2. El proxy empaqueta los parámetros (marshalling) y establece una conexión RPC con el endpoint del servidor. Durante esa conexión, el cliente puede autenticarse mediante NTLM o Kerberos.
-3. El stub (lado servidor) recibe los datos RPC, reconstruye los parámetros (unmarshalling), ejecuta el método real del objeto COM y devuelve el resultado al cliente mediante RPC.
+1️⃣ El proxy (lado cliente) contacta con el **RPC Endpoint Mapper** del servidor en el puerto TCP/135 para localizar el endpoint donde escucha el servidor COM. El Endpoint Mapper responde con un endpoint RPC válido (por ejemplo un puerto dinámico, una named pipe o un endpoint ALPC).
+
+2️⃣ El proxy empaqueta los parámetros (marshalling) y establece una conexión RPC con el endpoint del servidor. Durante esa conexión, el cliente puede autenticarse mediante NTLM o Kerberos.
+
+3️⃣ El stub (lado servidor) recibe los datos RPC, reconstruye los parámetros (unmarshalling), ejecuta el método real del objeto COM y devuelve el resultado al cliente mediante RPC.
 - En los ataques Potato, el atacante fuerza que un servicio COM privilegiado (normalmente SYSTEM) devuelva la respuesta a un endpoint RPC o una named pipe controlada por él. Gracias a `SeImpersonatePrivilege`, puede impersonar ese contexto autenticado y obtener un token SYSTEM.
 
 Finalmente, en el nivel más bajo, RPC utiliza distintos **transportes**, y uno de los más importantes en Windows son los **Named Pipes**. 
