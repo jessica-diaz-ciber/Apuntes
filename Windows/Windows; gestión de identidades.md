@@ -127,8 +127,7 @@ Los privilegios son capacidades específicas asignadas a usuarios o grupos, inde
 ---
 # 4. 🔐 Autenticación y autorización en Windows
 
-> [!abstract] Autenticación y autorización en Windows  
-> Windows separa dos conceptos fundamentales: **autenticación** (comprobar que el usuario es quien dice ser) y **autorización** (qué acciones puede realizar sobre cada recurso).
+Windows separa dos conceptos fundamentales: **autenticación** (comprobar que el usuario es quien dice ser) y **autorización** (qué acciones puede realizar sobre cada recurso).
 
 **Windows utiliza autenticación SSO (Single Sign-On)**, en la que el usuario se autentica una vez y accede a múltiples recursos sin volver a introducir credenciales. Esto funciona de la siguiente manera:
 
@@ -142,13 +141,16 @@ Los privilegios son capacidades específicas asignadas a usuarios o grupos, inde
     
 5. **Autorización →** Cuando el proceso intenta acceder a un recurso, el sistema compara el token con las ACL ("Access Control Lists") del objeto; dentro de ellas, las ACE ("Access Control Entries") determinan si el acceso se permite o se deniega.
 
-> [!warning] El proceso LSASS.exe - Local Security Authority Subsystem Service
-> `lsass.exe` es el proceso central de seguridad de Windows. Corre con privilegios de **SYSTEM** y es el responsable de la autenticación, la creación y gestion de sesiones y la emisión de tokens.
-> - **Este proceso almacena en memoria las credenciales usadas, por tanto es el objetivo principal de los atacantes**, por tanto está protegido con meidas de seguridad como **PPL** (protege su memoria de ser leida por otros procesos) y **credential guard** (aisla las credenciales en un entorno virtual separado del kernel)
+#### El proceso LSASS.exe - Local Security Authority Subsystem Service
+`lsass.exe` es el proceso central de seguridad de Windows. Corre con privilegios de **SYSTEM** y es el responsable de la autenticación, la creación y gestion de sesiones y la emisión de tokens.
 
-> [!error] SAM Database - Security Account Manager
+**Este proceso almacena en memoria las credenciales usadas, por tanto es el objetivo principal de los atacantes**, por tanto está protegido con meidas de seguridad como **PPL** (protege su memoria de ser leida por otros procesos) y **credential guard** (aisla las credenciales en un entorno virtual separado del kernel)
+
+> [!WARNING]
+> **SAM Database - Security Account Manager**
+> 
 > La **SAM** es la base de datos local donde Windows almacena los hashes NTLM de los usuarios locales. Se encuentra en la ruta `C:\Windows\System32\config\SAM` . Esta base de datos está bloqueada mientras Windows está en ejecución y cifrada con una clave almacenada en el registro /(`SYSTEM` hive). LSASS la lee al arrancar para poder autenticar usuarios.
-> - Un usuario administrador o con `SeBackupPrivilege` puede crear un volcado de la sam con `reg save HKLM\SAM sam.bak` y `reg save HKLM\SYSTEM system.bak`. También es accesible desde un Live CD o si se obtiene el archivo desde una shadow copy.
+>> Un usuario administrador o con `SeBackupPrivilege` puede crear un volcado de la sam con `reg save HKLM\SAM sam.bak` y `reg save HKLM\SYSTEM system.bak`. También es accesible desde un Live CD o si se obtiene el archivo desde una shadow copy.
 
 ---
 ## 4.1. Modos de autenticación: SSPs
@@ -186,11 +188,11 @@ Existen dos versiones de NTLM
 - **NTLMv1**: El método mas antiguo, considerado obsoleto e inseguro por utilizar un cifrado muy débil. 
 - **NTLMv2**: Es el método actual. Es más robusto, pero vulnerable a **Pass-the-Hash** 
 
-> [!error] Cracking offline de hashes NTLM
-> **Un atacante puede interceptar el challenge y descifrarlo probando múltiples contraseñas posibles en un ataque por fuerza bruta**. Para cada contraseña candidata, el atacante calcula su hash, lo usa para cifrar el desafío interceptado y compara el resultado con la respuesta real. Si los valores coinciden, el atacante ha encontrado la contraseña en texto plano
+> [!CAUTION]
+> **Cracking offline de hashes NTLM**: Un atacante puede interceptar el challenge y descifrarlo probando múltiples contraseñas posibles en un ataque por fuerza bruta. Para cada contraseña candidata, el atacante calcula su hash, lo usa para cifrar el desafío interceptado y compara el resultado con la respuesta real. Si los valores coinciden, el atacante ha encontrado la contraseña en texto plano
 
-> [!error] Pass The Hash
-> Como lo que utiliza la autenticación de windows para completar el "desafío-respuesta" de la autenticación es el jasj, el atacante puede usarlo directante para acceder al sistema. Ademas como los hahes no cambian a menos que se cambie de contraseña, un atacante puede reutilizarlo las veces que quiera.
+> [!CAUTION]
+> **Pass The Hash:* *Como lo que utiliza la autenticación de windows para completar el "desafío-respuesta" de la autenticación es el jasj, el atacante puede usarlo directante para acceder al sistema. Ademas como los hahes no cambian a menos que se cambie de contraseña, un atacante puede reutilizarlo las veces que quiera.
 
 El formato que usan los hashes NTLMv2 es este:
 ```c
@@ -201,7 +203,7 @@ jessica:1001:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0::
          └── RID de la cuenta
 ```
 
-> [!info] El hash LM El hash LM siempre es el mismo (`aad3b435...`) porque está obsoleto y desactivado. El que importa es el **hash NT**.
+> El hash LM El hash LM siempre es el mismo (`aad3b435...`) porque está obsoleto y desactivado. El que importa es el **hash NT**.
 
 ---
 ## 4.3. Tipo de logins
@@ -218,15 +220,15 @@ Cuando un usuario se autentica, Windows registra el **tipo de logon**. Esto es c
 | **NewCredentials**    | 9   | `runas /netonly` — usa credenciales de otro usuario para acceder a un servicio red                 | ✅ Sí, en la máquina remota                                    |
 | **RemoteInteractive** | 10  | RDP — escritorio remoto                                                                            | ✅ Sí, es una sesión completa                                  |
 | **CachedInteractive** | 11  | Login offline con credenciales cacheadas                                                           | ✅ Sí, en la máquina local                                     |
-> [!tip] Restricted Admin Mode (RDP) 
+
 > Desde Windows 8.1 existe el modo **Restricted Admin** para RDP: la sesión se abre con un Impersonation Token en lugar de credenciales completas, evitando que queden en memoria. Se activa con `mstsc /restrictedAdmin`.
 
-> [!warning] El problema del "Double Hop"
-> El **Double Hop** es la situación en la que un usuario se conecta a un **Servidor A**, y desde ahí quiere acceder a un **Servidor B** con sus credenciales. El segundo salto es el problema. ¿Porqué? Porque al autenticarse en el servidor A, este crea el token pero no almacena las credenciales, por tanto no puede autenticarse en el servidor B.
-> - Para resolver esto, existen soluciones como la delegación de kerberos o CredSSP (reenvío de credenciales) pero ambas soluciones plantean cierto riesgo.
+> [!CAUTION]
+> **El problema del "Double Hop"**: El **Double Hop** es la situación en la que un usuario se conecta a un **Servidor A**, y desde ahí quiere acceder a un **Servidor B** con sus credenciales. El segundo salto es el problema. ¿Porqué? Porque al autenticarse en el servidor A, este crea el token pero no almacena las credenciales, por tanto no puede autenticarse en el servidor B.
+>> - Para resolver esto, existen soluciones como la delegación de kerberos o CredSSP (reenvío de credenciales) pero ambas soluciones plantean cierto riesgo.
 
-> [!info] Impersonation 
-> Un servicio puede recibir una conexión de un usuario y crear un **Impersonation Token** para actuar en su nombre sin tener sus credenciales. Esto es la base de la delegación y también del abuso de `SeImpersonatePrivilege` (Ej: Potato Attacks).
+> [!NOTE]
+> **Impersonation:** Un servicio puede recibir una conexión de un usuario y crear un **Impersonation Token** para actuar en su nombre sin tener sus credenciales. Esto es la base de la delegación y también del abuso de `SeImpersonatePrivilege` (Ej: Potato Attacks).
 
 ---
 ## 🔗 Ver también
