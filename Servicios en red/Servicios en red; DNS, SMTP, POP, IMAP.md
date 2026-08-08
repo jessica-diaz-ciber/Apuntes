@@ -45,15 +45,15 @@ La cadena de peticiones DNS se conforma por este orden
 
 5️⃣ El `Authoritative Server` es el propietario del dominio y resolverá la IP, que se cacheará en el cliente durante un tiempo limitado (segundos indicados en el "TTL")  `www.ejemplo.com. 300 IN A 93.184.216.34`
 
-> [!INFO]
+> [!NOTE]
 > **Root server** — la raíz del sistema
 > Existen 13 grupos de Root Servers, identificados con letras de la  `A` a la `M` (`a.root-servers.net` a `m.root-servers.net`). Son el punto de partida de cualquier resolución. No conocen las IPs, pero saben que servidores gestionan cada TLD del mundo. Por ejemplo, para el TLD `es` se pregunta al TLD nameserver `a.nic.es`. Fisicamente hay miles de instancias de estos servidores distribuidas por todo el mundo, mediante **anycast**: la misma IP enruta a la instancia más cercana geográficamente.
 
-> [!INFO]
+> [!NOTE]
 > **TLD Nameserver** — los servidores de dominio de nivel superior
 > Gestionan un TLD concreto (`.com`, `.org`, `.net`, `.es`...). No conocen las IPs de los dominios, pero conocen a que Authoritative Nameserver hacerle la petición para cada dominio registrado bajo ese TLD. Por ejemplo para`google serían` serían `ns1.google.com, ns2.google.com...`. Cuando se registra un dominio con por ejemplo GoDaddy, se notifica al operador del TLD los nameservers del dominio.
 
-> [!INFO]
+> [!NOTE]
 > **Authoritative Nameservers** — los servidores del dominio
 > Son los servidores que tienen la **respuesta definitiva** para un dominio concreto. Gestionan la **zona DNS** del dominio con todos sus registros (A, MX, TXT, CNAME...). Cuando un authoritative nameserver responde, incluye el flag `aa` (Authoritative Answer) en la cabecera DNS. Esa respuesta es la fuente de verdad, no viene de caché.
 
@@ -460,7 +460,7 @@ curl -k 'imaps://10.129.14.128/INBOX' --user jessica:p4ssw0rd -v
 ```
 
 ---
-# SNMP
+# 📶 SNMP
 
 > **SNMP** es el protocolo estándar para monitorizar y gestionar dispositivos de red: routers, switches, servidores, impresoras, UPS... Un sistema central (**manager**) consulta a los dispositivos (**agents**) datos como uso de CPU, tráfico de red o temperatura, y los agentes responden con valores estructurados de su base de datos local (**MIB**). Solo **SNMPv3** ofrece autenticación y cifrado reales. Las versiones anteriores transmiten todo en texto claro, incluyendo las contraseñas.
 
