@@ -433,7 +433,7 @@ POP3 está diseñado para **descargar** los correos al dispositivo local y (gene
 > [!NOTE] 
 > SPF + DKIM + DMARC juntos Los tres se complementan: SPF verifica el servidor de envío, DKIM verifica que el mensaje no fue alterado, y DMARC define qué hacer cuando alguno falla. Un dominio bien configurado tiene los tres.
 
-### Enumeración del servicio (pentesting)
+#### Enumeración del servicio (pentesting)
 
 ```bash
 # Escaneo con nmap — scripts por defecto
@@ -485,6 +485,7 @@ curl -k 'imaps://10.129.14.128/INBOX' --user jessica:p4ssw0rd -v
 
 SNMP usa UDP porque prioriza el rendimiento sobre la fiabilidad. Un sistema de monitorización hace miles de consultas por minuto a decenas de dispositivos: el overhead de establecer conexiones TCP haría el sistema lento. Las pérdidas ocasionales de paquetes son aceptables en monitorización. Para los INFORM (que sí requieren confirmación), el propio protocolo implementa retransmisión a nivel de aplicación.
 
+----
 ## Componentes
 
 #### MIB — Management Information Base
@@ -493,7 +494,7 @@ Una MIB es un archivo de texto ASCII que describe los objetos SNMP consultables 
 #### OID — Object Identifier
 Contiene al menos un Identificador de Objeto único (`OID`), el cual, además de la dirección única necesaria y un nombre, también provee información sobre el tipo, los derechos de acceso y una descripción del objeto respectivo. Los OIDs se pueden escribir de forma numérica (`1.3.6.1.2.1.1.1.0`) o con nombre (`SNMPv2-MIB::sysDescr.0`). Ambas formas identifican la misma variable.
 
----
+----
 ## 📦 Tipos de mensajes SNMP
 
 | Mensaje    | Dirección       | Descripción                                                          |
@@ -506,6 +507,8 @@ Contiene al menos un Identificador de Objeto único (`OID`), el cual, además 
 | `TRAP`     | Agent → Manager | Notificación asíncrona de un evento (no confirmada, v1/v2c)          |
 | `INFORM`   | Agent → Manager | Notificación asíncrona confirmada (el manager debe responder)        |
 
+
+----
 ## 📦 Versiones SNMP
 
 #### SNMPv1
@@ -535,7 +538,7 @@ SNMPv3 define tres niveles de seguridad combinables:
 
 Es importante notar que muchas organizaciones todavía están usando `SNMPv2`, ya que la transición a `SNMPv3` puede ser muy compleja, pero los servicios aún necesitan permanecer activos. 
 
----
+----
 ## ⚙️ Configuración
 
 Linux (`/etc/snmp/snmpd.conf`)
@@ -585,6 +588,8 @@ Tenemos varias maneras de autenticarnos
 | SNMPv3 noAuthNoPriv | `snmpget -v3 -l noAuthNoPriv -u <user> <ip>`                                            |
 | SNMPv3 authNoPriv   | `snmpget -v3 -l authNoPriv -u <user> -a SHA -A <auth_pass> <ip>`                        |
 | SNMPv3 AuthPriv     | `snmpwalk -v3 -l authPriv -u <user> -a SHA -A <auth_pass> -x AES -X <cipher_pass> <ip>` |
+
+
 Si dejamos esto, recorredemos toda la MIB (walk), Si no, debemos especificar el OID tras todo el comando, por ejemplo
 ```bash
 snmpget -v2c -c public 192.168.1.1 sysDescr # en forma texto
@@ -608,9 +613,10 @@ Despues de eso, podemos enumerar:
 |                        | `ipRouteTable`      | Tabla de rutas                                    |
 |                        | `hrSWRunName`       | Procesos en ejecución (en servidores con agente)  |
 
+
 Si tenemos permisos de escritura, podemos modificar un atributo: `snmpset (...) sysName.0 s "nuevo-nombre"`
 
----
+----
 ## Vulnerabilidades y fallos de seguridad
 
 > [!CAUTION]
