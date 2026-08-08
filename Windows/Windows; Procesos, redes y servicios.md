@@ -146,7 +146,8 @@ Finalmente, en el nivel más bajo, RPC utiliza distintos **transportes**, y uno 
 
 Se pueden listar con `dir \\.\pipe\` o con `pipelist.exe` de la suite de sysinternals
  
-> [!CAUTION] Named Pipes y escalada de privilegios 
+> [!CAUTION]
+> Named Pipes y escalada de privilegios 
 > Los Named Pipes son clave en varios ataques de escalada:
 >> **Printer Bug**: Fuerza al servicio de impresión del DC a autenticarse contra una máquina controlada por el atacante via `\\.\pipe\spoolss`, capturando su TGT (útil con Unconstrained Delegation).
 
