@@ -112,6 +112,7 @@ Al hacer "Ejecutar como administrador" → se usa el token completo
 
 Como los procesos están aislados y no pueden leer la memoria de otro, necesitan mecanismos adicionales para comunicarse entre sí y enviar o recibir datos. A esto se le llama **IPC (Inter-Process Communication)**.
 
+---------
 #### COM (Component Object Model)
 **COM (Component Object Model) es una tecnología de Microsoft que permite que distintos programas (o procesos) se comuniquen entre sí aunque estén creados en lenguajes diferentes.** 
  
@@ -122,6 +123,7 @@ Si un programa necesita de esta funcionalidad, solicita la creación de un objet
 
 Si bajamos un nivel, COM se apoya en RPC:
 
+---------
 #### RPC (Remote Procedure Call)
 Ees el mecanismo que realmente ejecuta las llamadas entre procesos.  A ojos del usuario, es como si hubiera ocurrido todo en el propio programa o la propia máquina
 
@@ -136,6 +138,7 @@ Cuando un cliente invoca un método de un objeto COM, esa llamada se transforma 
 
 Finalmente, en el nivel más bajo, RPC utiliza distintos **transportes**, y uno de los más importantes en Windows son los **Named Pipes**. 
 
+---------
 #### Named Pipes
 **Un Named Pipe es un canal de comunicación bidireccional con nombre, que se comporta como un archivo**: se abre, se lee, se escribe y se cierra. Además pueden tener  permisos DACL como cualquier objeto de Windows. Son el equivalente a los socket files de Linux
 - Usan el formato `\\.\pipe\nombre` (local) o `\\servidor\pipe\nombre` (remoto). Ej. `\\.\pipe\lsass` es para la autenticación local de LSASS
