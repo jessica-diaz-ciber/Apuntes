@@ -661,6 +661,9 @@ snmpwalk -v2c -c public 192.168.1.1 > snmp_full_walk.txt
 msf> use auxiliary/scanner/snmp/snmp_enum
 msf> use auxiliary/scanner/snmp/snmp_enumusers
 msf> use auxiliary/scanner/snmp/snmp_login     # brute force community strings
+
+# Enumeración de un OID con braa
+braa public@10.129.14.128:.1.3.6.*
 ```
 
 ---
