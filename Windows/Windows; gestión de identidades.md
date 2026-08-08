@@ -52,7 +52,7 @@ A parte del SID, existen otros nombres que se usan para identificar a los usuari
 > [!NOTE]
 > **Display Name**: Es el nombre completo que aparece en la pantalla de bloqueo o en el menú de inicio. No se utiliza para la autenticación técnica interna, sino meramente para la identificación visual del usuario. Ej `"Juan Cuesta"`
 
-> [!tip] ¿Dónde ver usuarios y grupos? `Win + R` → `compmgmt.msc` → **Administración de equipos** → Usuarios y grupos locales
+¿Dónde ver usuarios y grupos? `Win + R` → `compmgmt.msc` → **Administración de equipos** → Usuarios y grupos locales
 
 ---
 # 2. 👤Tipos de usuarios y grupos
