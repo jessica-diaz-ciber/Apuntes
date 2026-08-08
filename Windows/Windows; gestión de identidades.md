@@ -1,23 +1,3 @@
-# Índice
-
-[[Windows; gestión de identidades#1. 🏷️ Nombres e identificadores]]
-- [[Windows; gestión de identidades#1.1. SID — Security Identifier]]
-- [[Windows; gestión de identidades#1.2. Nombres de usuarios]]
-
-[[Windows; gestión de identidades#2. 👤Tipos de usuarios y grupos]]
-- [[Windows; gestión de identidades#2.1. Tipos de usuarios]]
-- [[Windows; gestión de identidades#2.2. Tipos de usuarios]]
-
-[[Windows; gestión de identidades#3. 🔑 Privilegios]]
-- [[Windows; gestión de identidades#3.1. Lista de privilegios]]
-
-[[Windows; gestión de identidades#4. 🔐 Autenticación y autorización en Windows]]
-- [[Windows; gestión de identidades#4.1. Modos de autenticación SSPs]]
-- [[Windows; gestión de identidades#4.2. Proceso de Autenticación por NTLM]]
-- [[Windows; gestión de identidades#4.3. Tipo de logins]]
-
----
-> [!abstract] Introducción
 >  Windows gestiona el acceso al sistema mediante **usuarios** (identidades individuales), **grupos** (colecciones de usuarios con los mismos permisos) y **privilegios** (capacidades específicas asignadas a ambos). Cada usuario tiene un identificador único llamado **SID** y se autentica mediante hashes **NTLM**.
 
 ## 1. 🏷️ Nombres e identificadores
@@ -42,35 +22,35 @@ S-1-5-21-<subautoridades>-<RID>
 | **Subautoridades** | Serie numérica que identifica el dominio    | `3623811015-3361044348-30300820`  |
 | **RID**            | Identifica el rol de la cuenta              | `500` (Admin), `1001+` (usuarios) |
 
-> [!tip] RIDs relevantes
-> 
-> - `500` → Administrador built-in
-> - `501` → Invitado
-> - `1000+` → Usuarios creados manualmente
 
+RIDs relevantes
+- `500` → Administrador built-in
+- `501` → Invitado
+- `1000+` → Usuarios creados manualmente
+
+-------
 ## 1.2. Nombres de usuarios
 
 A parte del SID, existen otros nombres que se usan para identificar a los usuarios y que utilizan las personas:
 
-> [!example]+ Friendly Name
-> Es un alias que permite identificar fácilmente a un usuario y que se muestra en la interfaz del usuario y en las ACLs de archivos y carpetas. El sistema internamente traduce estos alias a SIDs.
-> Ej  `juan`
+> [!NOTE]
+> **Friendly Name**: Es un alias que permite identificar fácilmente a un usuario y que se muestra en la interfaz del usuario y en las ACLs de archivos y carpetas. El sistema internamente traduce estos alias a SIDs. Ej  `juan`
 
-> [!example]+ sAMAccountName
-> Es el nombre de inicio de sesión "clásico" o de "nivel inferior" (down-level). Tiene un límite de 20 caracteres y tienen dos partes separadas por un backslash "`\`"
->  
+> [!NOTE]
+> **sAMAccountName**: Es el nombre de inicio de sesión "clásico" o de "nivel inferior" (down-level). Tiene un límite de 20 caracteres y tienen dos partes separadas por un backslash "`\`"
+
 | Formato                 | Uso                                       | Ejemplo                   |
 | ----------------------- | ----------------------------------------- | ------------------------- |
 | `<dominio>\<usuario>`   | Usuarios del sistema o dominio            | `PC_juan\juan` |
 | `BUILTIN\<grupo>`       | Grupos predefinidos del sistema           | `BUILTIN\Guests`          |
 | `NT AUTHORITY\<cuenta>` | Cuentas del sistema que ejecutan procesos | `NT AUTHORITY\SYSTEM`     |
 
-> [!example]+ User Principal Name (UPN)
-> Es el formato de inicio de sesión moderno, similar a un correo electrónico (ej. `usuario@dominio.com`), utilizado principalmente en entornos de Active Directory y cuentas de Microsoft. 
 
-> [!example]+ Display Name
-> Es el nombre completo que aparece en la pantalla de bloqueo o en el menú de inicio. No se utiliza para la autenticación técnica interna, sino meramente para la identificación visual del usuario. 
-> Ej `"Juan Cuesta"`
+> [!NOTE]
+> **User Principal Name (UPN):** Es el formato de inicio de sesión moderno, similar a un correo electrónico (ej. `usuario@dominio.com`), utilizado principalmente en entornos de Active Directory y cuentas de Microsoft. 
+
+> [!NOTE]
+> **Display Name**: Es el nombre completo que aparece en la pantalla de bloqueo o en el menú de inicio. No se utiliza para la autenticación técnica interna, sino meramente para la identificación visual del usuario. Ej `"Juan Cuesta"`
 
 > [!tip] ¿Dónde ver usuarios y grupos? `Win + R` → `compmgmt.msc` → **Administración de equipos** → Usuarios y grupos locales
 
@@ -92,7 +72,8 @@ Encontramos estos usuarios:
 ---
 ## 2.2. Tipos de grupos
 
-> [!example]+ Grupos de acceso general
+#### Grupos de acceso general
+
 | Grupo                   | Descripción                                                                                                           |
 | ----------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | **Administrators**      | Pueden realizar tareas administrativas via UAC. El primer usuario creado en la instalación entra aquí automáticamente |
@@ -102,14 +83,17 @@ Encontramos estos usuarios:
 | **Authenticated Users** | Todos los usuarios que han iniciado sesión con credenciales válidas                                                   |
 | **Everyone**            | Todos: autenticados y no autenticados. ⚠️ Asignar permisos aquí afecta a cualquiera                                   |
 
-> [!example]+ Grupos de acceso remoto
-> | Grupo                       | Protocolo | Descripción                                                             |
+
+#### Grupos de acceso remoto
+
+| Grupo                       | Protocolo | Descripción                                                             |
 | --------------------------- | --------- | ----------------------------------------------------------------------- |
 | **Remote Desktop Users**    | RDP       | Pueden conectarse remotamente con escritorio gráfico                    |
 | **Remote Management Users** | WinRM     | Pueden conectarse remotamente por línea de comandos (PowerShell remoto) |
 
-> [!example]+ Grupos especializados
-> | Grupo                         | Descripción                                                                      |
+#### Grupos especializados
+
+| Grupo                         | Descripción                                                                      |
 | ----------------------------- | -------------------------------------------------------------------------------- |
 | **Event Log Readers**         | Pueden leer el registro de eventos. Útil para administradores y equipos SOC      |
 | **Operadores** (varios tipos) | Gestión delegada de tareas específicas: servicios, backups, control de acceso... |
