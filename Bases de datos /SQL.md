@@ -1,10 +1,26 @@
+
 > **MySQL** es el sistema de gestión de bases de datos relacionales (RDBMS) de código abierto más extendido del mundo. Almacena datos en tablas con filas y columnas, relacionadas entre sí mediante claves. 
 
-Es la base de datos de la mayoría de aplicaciones web (WordPress, Drupal, Magento...) y forma parte del stack LAMP (Linux, Apache, MySQL, PHP). Desde su adquisición por Oracle en 2010, la comunidad mantiene el fork **MariaDB** como alternativa compatible.
 
 ---
 # 1. 🗄️ ¿Cómo funciona MySQL?
 
+MySQL funciona según el **principio cliente-servidor** y consta de un servidor MySQL y uno o más clientes. 
+
+- El servidor gestiona el almacenamiento, procesamiento y distribución de los datos, que se organizan en tablas con filas, columnas y diferentes tipos de datos. Las bases de datos pueden exportarse o respaldarse como un archivo `.sql`, por ejemplo `wordpress.sql`.
+- Los clientes interactúan con el servidor mediante consultas SQL para **insertar, eliminar, modificar y recuperar datos**. Varios clientes pueden realizar consultas simultáneamente y el acceso puede realizarse desde una red interna o a través de Internet. Un ejemplo habitual es `WordPress`, que almacena en MySQL información como publicaciones, usuarios, contraseñas y configuraciones. En arquitecturas más complejas, las bases de datos también pueden distribuirse entre varios servidores.
+
+Es la base de datos de la mayoría de aplicaciones web (WordPress, Drupal, Magento...) y forma parte del stack LAMP (Linux, Apache, MySQL, PHP). Desde su adquisición por Oracle en 2010, la comunidad mantiene el fork **MariaDB** como alternativa compatible.
+
+> [!CAUTION]
+> Cuando se produce un error, la aplicación web puede devolver información sobre este al cliente. Los errores pueden revelar detalles sobre la interacción entre la aplicación y la base de datos y, en determinados casos, ayudar a identificar vulnerabilidades como las `inyecciones SQL`.
+
+Si la consulta se procesa correctamente, la aplicación recibe el resultado y puede utilizarlo para funciones como autenticación, búsquedas o generación de contenido.
+
+> [!NOTE]
+> `MariaDB` es un **fork de MySQL** creado a partir de su código fuente original. Surgió tras la adquisición de MySQL AB por Oracle y la salida de parte del equipo original de desarrollo. MariaDB mantiene una alta compatibilidad con MySQL, aunque actualmente ambos proyectos han evolucionado de forma independiente.
+
+----
 ## 1.1. 🗄️ Flujo
 El flujo de trabajo con MySQL es el siguiente: 
 
