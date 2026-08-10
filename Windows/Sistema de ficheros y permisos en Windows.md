@@ -1,4 +1,3 @@
-> [!abstract] Introducción 
 > Windows organiza sus archivos en una jerarquía de carpetas bajo `C:\`. El acceso a ellas está controlado por ACLs. Toda la configuración del sistema se centraliza en el **Registro de Windows**, una base de datos jerárquica que es la columna vertebral de la configuración del sistema y las aplicaciones.
 
 ## 1. 📁 Estructura de directorios
@@ -23,38 +22,41 @@ C:\
 └── inetpub\wwwroot\        → raíz web IIS (solo si hay servidor web configurado)
 ```
 
+----
 ## 1.2. Detalle de carpetas clave
 
-> [!info]+ `C:\Users\<usuario>\` 
-> Directorio personal de cada usuario. En sistemas antiguos era `C:\Documents and Settings\Usuario`.
-> 
-> ```
-> \Users\Jessica\
-> ├── Desktop\, Documents\, Pictures\, Downloads\...
-> └── AppData\                     ← oculta
->     ├── Roaming\                 → configuraciones que siguen al usuario (ej: en dominio)
->     ├── Local\                   → datos locales, caché, archivos grandes y sensibles
->     └── LocalLow\                → como Local pero con menor integridad (ej: modo incógnito)
-> ```
+#### `C:\Users\<usuario>\` 
+Directorio personal de cada usuario. En sistemas antiguos era `C:\Documents and Settings\Usuario`.
 
-> [!info]+ `C:\Windows\System32\`
->  El corazón de Windows. Contiene DLLs esenciales, ejecutables del sistema (`cmd.exe`, `control.exe`, `utilman.exe`...) y dos subcarpetas críticas:
-> 
-> - `\config\` → las colmenas del registro en vivo: `SAM`, `SECURITY`, `SYSTEM`, `SOFTWARE`
-> - `\repair\` → copia de seguridad de esas mismas colmenas
+```
+\Users\Jessica\
+├── Desktop\, Documents\, Pictures\, Downloads\...
+└── AppData\                     ← oculta
+    ├── Roaming\                 → configuraciones que siguen al usuario (ej: en dominio)
+    ├── Local\                   → datos locales, caché, archivos grandes y sensibles
+    └── LocalLow\                → como Local pero con menor integridad (ej: modo incógnito)
+```
 
-> [!info]+ `C:\ProgramData\` 
-> Carpeta **oculta** con datos que los programas necesitan para ejecutarse, accesible para todos los usuarios del sistema. Distinta de `Program Files` (los binarios) y de `AppData` (datos por usuario).
+----
+#### `C:\Windows\System32\`
+El corazón de Windows. Contiene DLLs esenciales, ejecutables del sistema (`cmd.exe`, `control.exe`, `utilman.exe`...) y dos subcarpetas críticas:
+- `\config\` → las colmenas del registro en vivo: `SAM`, `SECURITY`, `SYSTEM`, `SOFTWARE`
+- `\repair\` → copia de seguridad de esas mismas colmenas
 
-> [!tip]+ Equivalencias con Linux
-> 
-> |Windows|Linux|
-> |---|---|
-> |`C:\`|`/`|
-> |`C:\Users\`|`/home/`|
-> |`C:\Windows\System32\`|`/bin/`, `/lib/`|
-> |`C:\inetpub\wwwroot\`|`/var/www/html/`|
-> |`C:\ProgramData\`|`/etc/` (aprox.)|
+----
+#### `C:\ProgramData\` 
+Carpeta **oculta** con datos que los programas necesitan para ejecutarse, accesible para todos los usuarios del sistema. Distinta de `Program Files` (los binarios) y de `AppData` (datos por usuario).
+
+----
+Equivalencias con Linux
+
+| Windows                | Linux            |
+| ---------------------- | ---------------- |
+| `C:\`                  | `/`              |
+| `C:\Users\`            | `/home/`         |
+| `C:\Windows\System32\` | `/bin/`, `/lib/` |
+| `C:\inetpub\wwwroot\`  | `/var/www/html/` |
+| `C:\ProgramData\`      | `/etc/` (aprox.) |
 
 ---
 ## 2. 🔒 ACL — Control de acceso a archivos
@@ -67,15 +69,15 @@ Cada archivo y carpeta tiene un **Security Descriptor** que define quién puede 
 | **DACL** _(Discretionary ACL)_   | Lista de quién puede hacer qué sobre el objeto  |
 | **ACE** _(Access Control Entry)_ | Cada regla individual dentro de una ACL         |
 | **SACL** _(System ACL)_          | Define qué accesos se registran en el Event Log |
-> [!warning] Orden de evaluación
->  Windows evalúa las ACEs en orden. Las **denegaciones explícitas tienen prioridad**. Si ninguna ACE coincide, el acceso se **deniega por defecto**.
+> [!TIP] 
+> **Orden de evaluación**: Windows evalúa las ACEs en orden. Las **denegaciones explícitas tienen prioridad**. Si ninguna ACE coincide, el acceso se **deniega por defecto**.
 
 ---
 ## 2.1. Entender el sistema de permisos
 
-> [!tip]+ Permisos simples
-> Estos permisos son una combinación de permisos avanzados. Son los que se usan para administrar el sistema de manera sencilla sin complicarse.
-> 
+#### Permisos sismples
+Estos permisos son una combinación de permisos avanzados. Son los que se usan para administrar el sistema de manera sencilla sin complicarse.
+ 
 | Sigla  | Permiso        | Descripción                                                                          |
 | ------ | -------------- | ------------------------------------------------------------------------------------ |
 | **N**  | No access      | No se tiene ningún permiso                                                           |
@@ -86,10 +88,11 @@ Cada archivo y carpeta tiene un **Security Descriptor** que define quién puede 
 | **W**  | Write          | Permite crear o modificar archivos                                                   |
 | **D**  | Delete         | Permite borrar el archivo o carpeta                                                  |
 
-> [!tip]+ Permisos avanzados
-> Los permisos avanzados son los permisos individuales que realmente usa Windows. Existen bastantes, pero vamos a dar los más importantes
-> 
-> | Sigla    | Permiso                        | Descripción                                                |
+---
+#### Permisos avanzados
+Los permisos avanzados son los permisos individuales que realmente usa Windows. Existen bastantes, pero vamos a dar los más importantes
+ 
+| Sigla    | Permiso                        | Descripción                                                |
 | -------- | ------------------------------ | ---------------------------------------------------------- |
 | **DE**   | Delete                         | Borrar el archivo o carpeta                                |
 | **RC**   | Read Control                   | Ver los permisos del objeto                                |
@@ -104,15 +107,17 @@ Cada archivo y carpeta tiene un **Security Descriptor** que define quién puede 
 | **WA**   | Write attributes               | Permite cambiar atributos                                  |
 > El permiso simple F (Full access) se construye a partir de juntar un montón de permisos avanzados
 
-> [!tip]+ Permisos heredados
-> Son permisos que relacionan los contenedores (carpetas) con su contenido (subcarpeta y archivos). Son algo complejos, para lo que tenemos el siguiente ejemplo:
-> ```
+---
+#### Permisos heredados
+Son permisos que relacionan los contenedores (carpetas) con su contenido (subcarpeta y archivos). Son algo complejos, para lo que tenemos el siguiente ejemplo:
+```
 Carpeta_A  
 ├── archivo.txt
 └── Carpeta_B
        └── Carpeta_C
-> ```
-> | Sigla    | Permiso               | Descripción                                                                                       | Ejemplo                                                          |
+```
+
+| Sigla    | Permiso               | Descripción                                                                                       | Ejemplo                                                          |
 | -------- | --------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
 | **(I)**  | **Inherit**           | Los permisos son heredados de la carpeta madre                                                    | _El permiso de archivo.txt viene de Carpeta_A_                   |
 | **(OI)** | **Object-Inherit**    | El permiso se copiará a los archivos dentro de la carpeta.                                        | _El permiso de Carpeta_A llega a archivo.txt_                    |
@@ -163,11 +168,7 @@ Para asignar permisos podemos usar icacls con le parámetro  `/grant`  segui
 | Añadir un permiso                    | `icacls <archivo> /grant <usuario>:(<permiso>)`   |
 | Asignar permisos de manera recursiva | `icacls <archivo> /grant:r <usuario>:(<permiso>)` |
 | Quitar un permiso                    | `icacls <archivo> /remove <usuario>:(<permiso>)`  |
+
 >⚠️ Lo ideal con archivos sensibles es eliminar todos los permisos y luego añadirlos de uno en uno. Así aplicaremos el principio de “Mínimo Privilegio”
 
 
-
-## 🔗 Ver también
-
-- [[Windows; gestión de identidades]]
-- [[Active Directory]]
