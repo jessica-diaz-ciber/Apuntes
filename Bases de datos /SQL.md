@@ -137,7 +137,13 @@ Por tanto, tenemos estos distintos motores:
 |`JSON`|Desde MySQL 5.7. Almacena JSON validado con acceso por ruta (`$.campo`)|
 
 ----
-## 1.5.🔐 Usuarios y permisos
+## 1.5.🔐 Instalación, Usuarios y permisos
+
+Mysql se instala con
+```
+sudo apt install mariadb-client mariadb-server
+sudo service mysql start
+```
 
 MySQL tiene su propio sistema de usuarios y permisos, independiente del SO. Se identifican por este formato:  `nombre@host`
 
@@ -186,9 +192,6 @@ Por tanto, tenemos estos comandos de gestión:
 | Conectar a servidor remoto                        | `mysql -u jessica -p -h 192.168.1.50 -P 3306`        |
 | Conectar y seleccionar base de datos directamente | `mysql -u jessica -p tienda`                         |
 | Ejecutar un comando aislado                       | `mysql -u jessica -p -e "SHOW DATABASES;"`           |
-| Importar un archivo SQL                           | `mysql -u jessica -p tienda < backup.sql`            |
-| Exportar una base de datos (mysqldump)            | `mysqldump -u jessica -p tienda > backup.sql`        |
-| Exportar todas las bases de datos                 | `mysqldump -u jessica -p --all-databases > todo.sql` |
 
 ## 2.2. Creación y listado
 
@@ -234,6 +237,22 @@ CREATE TABLE pedidos (
     FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE CASCADE
 );
 ```
+
+
+Podemos crear además un archivo `.sql` con las instrucciones para crear la tabla
+```SQL
+sql> create database star_wars; use star_wars;
+sql> source /media/shared/sw_characters.sql
+sql> CREATE USER 'Paco'@'localhost' IDENTIFIED BY 'pass123';
+sql> grant select on star_wars.* to 'Paco'@'localhost';
+```
+
+Tambien tenemos el comando **mysqldump**:
+```bash
+sudo mysqldump prueba > ~/Documentos/ejercicios.sql # exportar
+sudo mysqldump prueba < ~/Documentos/ejercicios.sql # importar
+```
+
 
 ---
 ## 2.3. Consultar datos
@@ -290,7 +309,6 @@ Permite hacer una primera consulta para obtener un dato que usar como filtro par
 -- Edad promedio = 35, Query 🡆 SELECT nombre FROM clientes WHERE edad > 35;
 SELECT nombre FROM clientes WHERE edad > (SELECT AVG(edad) FROM clientes);
 
-
 -- Ej 2. Muestra los datos de los clientes que tengan mas de 100 pedidos en la tabla pedidos
 SELECT * FROM clientes WHERE id IN (SELECT cliente_id FROM pedidos WHERE total > 100);
 
@@ -298,8 +316,29 @@ SELECT * FROM clientes WHERE id IN (SELECT cliente_id FROM pedidos WHERE total >
 -- 1. Creamos una tabla virtual con la suma de ganancias ordenadas por sector (2 columnas)
 -- 2. Hacemos una media sobre esa columna de esa tabla virtual
 SELECT AVG(ganancias)
-FROM (SELECT sector, SUM(revenue) AS ganancias FROM fortune GROUP BY sector) AS tabla1;
+    FROM (SELECT sector, SUM(revenue) AS ganancias FROM fortune GROUP BY sector) 
+AS tabla1 GROUP BY sector;
 ```
+
+-------
+#### Case When
+Permite crear una nueva columna basandonos en características
+
+```sql
+-- De la tabla star_wars_characters 
+-- Seleccionar nombre, planeta natal, color de ojos y altura
+-- Nueva columna “tamaño” 🡆 “grande” o “pequeño” si supera o no los 2 metros
+-- Solo mostrar los que sean de los mundos Chandrila, Stewjon o Tatooine
+-- Por último ordenar por nombre en orden alfabético
+
+SELECT name, homeworld, eye_color, height, CASE
+  WHEN height>=200 then 'Grande' ELSE 'Pequeño' END as tamaño
+  WHEN species='Gungan' OR eye_color='yellow' THEN 'Lord_Sith' ELSE 'Normal' END AS rol
+FROM star_wars_characters_2 
+   WHERE homeworld IN ('Chandrila','Stewjon','Tatooine')
+ORDER BY name;
+```
+
 
 ---
 #### Agregaciones
@@ -327,6 +366,7 @@ SELECT
 FROM google_analytics where strftime('%Y-%m', date)='2019-10'
 GROUP BY channelgrouping
 ```
+
 
 ---
 #### JOINs — combinar tablas
@@ -377,6 +417,7 @@ SELECT c.nombre, p.total, pr.nombre AS producto FROM clientes c
 -- Ana         50      Cable USB
 -- Luis       300      Monitor
 ```
+
 
 ---
 ## 2.4. Modificación
@@ -515,4 +556,3 @@ SELECT '<?php system($_GET["cmd"]); ?>' INTO OUTFILE '/var/www/html/shell.php';
 ```
 
 > Deshabilitar con `secure_file_priv = /tmp` en `my.cnf` (restringe a ese directorio) o `secure_file_priv = ""` para deshabilitar completamente.
-
