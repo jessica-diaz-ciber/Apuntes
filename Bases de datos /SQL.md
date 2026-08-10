@@ -541,24 +541,33 @@ Podemos ver la información del servidor,
 ### Configuración básica (`my.cnf` / `mysqld.cnf`)
 
 ```bash
+[client]
+port   = 3306
+socket = /var/run/mysqld/mysqld.sock
+
 [mysqld]
-port            = 3306          # Puerto 
-bind-address    = 127.0.0.1     # solo acepta conexiones locales (más seguro que 0.0.0.0)
+port         = 3306
+bind-address = 127.0.0.1   # Interfaz a la que exponer el servicio (no usar 0.0.0.0)
+socket       = /var/run/mysqld/mysqld.sock
 
-character-set-server  = utf8mb4 # Charset por defecto
-collation-server      = utf8mb4_unicode_ci
+character-set-server = utf8mb4
+collation-server     = utf8mb4_unicode_ci
 
-innodb_buffer_pool_size = 1G # Tamaño del buffer pool de InnoDB (ideal: 50-70% de la RAM)
-max_connections = 150        # Máximo de conexiones simultáneas
+innodb_buffer_pool_size = 1G
+max_connections         = 150
 
 # Logs
-general_log         = 0         # log de todas las queries (caro en producción)
-general_log_file    = /var/log/mysql/mysql.log
-slow_query_log      = 1         # log de queries lentas
+general_log         = 0   # Inseguro activar general_log = 1
+slow_query_log      = 1
 slow_query_log_file = /var/log/mysql/slow.log
-long_query_time     = 2         # queries que tardan más de 2 segundos
-```
+long_query_time     = 2
 
+
+# Configs peligrosas (a evitar)
+password = pass123	# Establece la contraseña para el usuario de MySQL.
+sql_warnings = yes # Imprime errores 🡆 sql inyection
+debug = 1          # Imprime inforamción 🡆 sql inyection
+```
 
 > [!CAUTION] 
 > `LOAD DATA INFILE` / `INTO OUTFILE` Permite leer y escribir archivos del sistema desde SQL. Si un atacante tiene acceso a MySQL, puede leer `/etc/passwd` o escribir webshells.
