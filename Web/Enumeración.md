@@ -1,6 +1,33 @@
 
+# 0. Enumeración básica
+
+## 0.1. Enumeración activa
+
+#### Whatweb, wappaylyzer y curl
+Estas herramientas (Whatweb en cli y wappalyzer como extensión de firefox) pueden dar pistas de las tecnologías con las que está hecha la web: ¿Utiliza un CMS conocido? ¿Utiliza en cambio un framework?
+
+#### Certificado en HTTPs
+En HTTPs, podemos examinar el certificado SSL, que puede que contenga nombres de dominio:
+```
+$: openssl s_client -connect 10.10.11.129:443
+CONNECTED(00000003)
+depth=0 CN = research.search.htb, CN = research
+```
+
+#### DNS
+Mediante DNS podemos obtener información con la herramienta `dig` o con `dnsenum`, tambien tratar de realizar una transferencia de zona AXFR.
+
+----
+## 0.2. Enumeración pasiva
+Una vez identificadas las tecnologías básicas, podemos ahorrarnos mucho tiempo si ya tenemos nociones de cómo funcionan.
+
+- Sistemas conocidos como **Wordpress** o **Apache Tomcat** tienen siempre la misma estructura de rutas ya conocidas. 
+- Si es un proyecto de github, se puede buscar en el repositorio el esqueleto básico para saber como está montado.
+
+El objetivo es buscar páginas de administración, nombres de bases de datos conocidas, rutas o archivos de configuración... etc
 
 
+---
 # 1. Lista de diccionarios
 
 Diccionarios (dentro de `/usr/share`):
@@ -17,6 +44,8 @@ Diccionarios (dentro de `/usr/share`):
 | Nombres de usuarios                | `secLists/Usernames/Names/names.txt`                       |
 | Direcciones IP                     | `seclists/Fuzzing/IPv4-Addresses.txt`                      |
 | User Agents                        | `seclists/Fuzzing/User-Agents/user_agents.txt`             |
+| Extensiones                        | `seclists/Discovery/Web-Content/web-extensions.txt`        |
+| Números                            | `for i in $(seq 1 1000); do echo $i >> nums.txt; done`     |
 
 
 ---------
@@ -25,7 +54,7 @@ Diccionarios (dentro de `/usr/share`):
 #### FUFF
 Con ffuf, necesitamos una url, un diccionario y la palabra `FUZZ` que sustituya el parámetro que bruteforcear.
 
-Luego tenemos los operadores como filtros:
+Tenemos los operadores como filtros:
 
 | Uso                         | Evitarlo                 | Buscarlo              |
 | --------------------------- | ------------------------ | --------------------- |
@@ -35,10 +64,30 @@ Luego tenemos los operadores como filtros:
 | Tamaño (número de palabras) | `-fw 203`                | `-mw 203`             |
 | Texto exacto                | `-mr "No account found"` | `-mr "Account found"` |
 
+Aparte, existen estos parámetros:
+- `-ic`: ignorar lineas de copyright
+
+
 ----
 ## 2.1. Fuzzing de distintas partes
 
+----------
+#### Fuzzing de vhosts / subdominios
+Los vhost y subdominios pueden revelar rutas ocultas mal protegidas. Los vhost necesitan especificarse en la cabecera `Host`
+```bash
+ffuf -w .../subdomainstopmillion50000.txt -H "Host: FUZZ.web.com" -u http://web.com/
+
+gobuster vhost -u http://web.com -w .../subdomains-top1million-110000.txt --append-domain
+```
+
+Para los subdominios es más sencillo:
+```
+ffuf -u https://FUZZ.web.com -w .../subdomainstopmillion50000.txt 
+```
+
+-----
 #### Fuzzing de subdirectorios
+Ahora, teniendo una página objetivo, vamos a tratar de encontrar sus subdirectorios y obtener una estructura interna de la web. 
 
 ```bash
 ffuf -w ./directory-list-2.3-medium.txt -t 200 -u "http://web.htb/FUZZ"
@@ -47,36 +96,46 @@ ffuf -w ./directory-list-2.3-medium.txt -t 200 -u "http://web.htb/FUZZ.php"
 gobuster dir -w .../directory-list-2.3-medium.txt -t 200 -u http://web.com/ 
 ```
 
-Si queremos hacer fuzzing con extensiones (php, aspx, html...):
+Si hay SLL/TLS:
+```bash
+gobuster -k -w .../directory-list-2.3-medium.txt -t 200 -u http://web.com/
+```
+
+Tambien podemos activar la recursión y su profundidad, por ejemplo si queremos buscar rutas y dentro páginas php usaríamos estas opciones:
+```bash
+ffuf -w .../directory-list-2.3-small.txt -u http://web.com/FUZZ \
+-recursion -recursion-depth 1 -e .php -v
+```
+
+----------
+#### Fuzzing de extensiones
+Podemos tratar de averiguar las extensiones que procesa el servidor web, aunque tengamos ciertas nociones de antemano (los IIS procesan `.asp` y `.aspx` y los apache `.php`)
+```
+ffuf -w .../web-extensions.txt -u http://web/blog/indexFUZZ
+```
+
+Si queremos hacer fuzzing con extensiones ya conocidas (php, aspx, html...):
 ```bash
 ffuf -u https://web.com/FUZZ -w .../directory-list-2.3-medium.txt -e .php,.html
 
 gobuster dir -x php -w .../directory-list-2.3-medium.txt -t 200 -u http://web.com/
 ```
 
-Si hay SLL/TLS:
-```bash
-gobuster -k -w .../directory-list-2.3-medium.txt -t 200 -u http://web.com/
-```
-
-----------
-#### Fuzzing de vhosts / subdominios
-
-```bash
-ffuf -w .../subdomainstopmillion50000.txt -H "Host: FUZZ.web.com" -u http://web.com/
-
-ffuf -u https://FUZZ.web.com -w .../subdomainstopmillion50000.txt 
-
-gobuster vhost -u http://web.com -w .../subdomains-top1million-110000.txt --append-domain
-```
 
 ----
 #### Fuzzing de parámetros 
-
+Para los parámetros GET
 ```bash
 ffuf -u http://web.com/image.php?FUZZ=/etc/passwd -mc 200 \
 -w .../burp-parameter-names.txt
 ```
+
+Para los parámetros POST simplemente ponemos `-X POST` y el `Content-Type`
+```bash
+ffuf -w .../burp-parameter-names.txt:FUZZ -u http://admin.web.com/admin/admin.php \
+ -X POST -d 'FUZZ=key' -H 'Content-Type: application/x-www-form-urlencoded' -fs xxx
+```
+
 
 ----
 #### Brute Force formulario POST
