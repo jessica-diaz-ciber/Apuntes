@@ -329,5 +329,5 @@ ffuf -request request.txt -request-proto https -w /usr/share/wordlists/rockyou.t
 
 Para http2 usamnos:  `-http2`
 
-> [!CAUTION 
+> [!CAUTION]
 > **Fuzzing para explotar vulnerabilidades:** Distintas vulnerabilidades como el SQLim el OS inyection o el SQLi entre otras pueden servirse del fuzzing para encontrar payloads válidos. Por ejemplo, podemos fuzzear webroots para LFI con [esta lista de palabras para Linux](https://github.com/danielmiessler/SecLists/blob/master/Discovery/Web-Content/default-web-root-directory-linux.txt) o [esta lista de palabras para Windows](https://github.com/danielmiessler/SecLists/blob/master/Discovery/Web-Content/default-web-root-directory-windows.txt). 
