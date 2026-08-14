@@ -1,6 +1,37 @@
-
 > **MySQL** es el sistema de gestión de bases de datos relacionales (RDBMS) de código abierto más extendido del mundo. Almacena datos en tablas con filas y columnas, relacionadas entre sí mediante claves. 
 
+# 0. DBMS
+
+Existen muchos tipos diferentes de bases de datos, cada uno de los cuales se adapta a un tipo de uso particular. Tradicionalmente, una aplicación utilizaba bases de datos basadas en archivos, lo cual era muy lento con el aumento de tamaño. Esto llevó a la adopción de los `Sistemas de Gestión de Bases de Datos` (`DBMS`, por sus siglas en inglés).
+
+> Un Sistema de Gestión de Bases de Datos (DBMS) ayuda a crear, definir, alojar y gestionar bases de datos. Hay varios tipos, entre ellos, los DBMS Relacionales (RDBMS), NoSQL, los basados en grafos y los almacenes de clave/valor.
+
+-----
+#### Requisitos de un DBMS
+Estos además cumplen con las siguientes características
+- **Concurrencia**: Permite que varios usuarios interactuen con la BBDD sin que unas consultas interfieran con otras
+- **Consistencia**: Asegura que los datos permanezcan consistentes y válidos en toda la base de datos.
+- **Seguridad**: Deben haber controles de autenticación y autorización para evitar la visualización o edición no autorizada de datos sensibles.
+- **Fiabilidad**: Se deben hacer backups y restauciones de manera sencilla para evitar problemas en caso de pérdida de datos o brechas de seguridad.
+- **Structured Query Language**: Debe haber un lenguaje con una sintaxis intuitiva para la consulta y manejo de datos
+
+Las bases de datos se dividen principalmente en **relacionales** y **no relacionales (NoSQL)**. Las relacionales utilizan **SQL**, mientras que NoSQL emplea diferentes modelos y métodos de comunicación.
+
+----
+## 0.1 Bases de datos relacionales
+
+> Son las más comunes y organizan los datos en **tablas** con filas y columnas, siguiendo un **esquema** (plantilla) definido. Las tablas se relacionan mediante **claves (keys)** que actúan como índices para acceder rápidamente a los datos y relacionarlos entre tablas (claves foraneas). De ahí que se llamen "**Bases de datos relacionales**" (`RDBMS`)  
+
+Los `RDMS` dan una estructura clara, consultas eficientes y buena consistencia para grandes conjuntos de datos estructurados.
+
+*En la base de datos de una tienda, podemos tener varias tablas: la primera almacena y muestra información de los clientes, la segunda de los productos (ventas y coste) y la tercera enumera los pedidos con sus respectivos clientes y métodos de pago*
+
+Por ejemplo, una tabla `users` puede tener `id`, `username`, etc., y una tabla `posts` puede tener `id`, `user_id`, `content`, etc. El `user_id` permite relacionar cada publicación con su usuario sin duplicar sus datos.
+
+Algunos ejemplos son **MySQL, PostgreSQL, Oracle, SQL Server y Microsoft Access**.
+
+> [!NOTE]
+> Aun así, las bases de datos NoSQL como MongoDB o GraphQL son mejores para datos que no usen esquemas rígidos (poco estructurados)
 
 ---
 # 1. 🗄️ ¿Cómo funciona MySQL?
@@ -20,7 +51,17 @@ Si la consulta se procesa correctamente, la aplicación recibe el resultado y pu
 > [!NOTE]
 > `MariaDB` es un **fork de MySQL** creado a partir de su código fuente original. Surgió tras la adquisición de MySQL AB por Oracle y la salida de parte del equipo original de desarrollo. MariaDB mantiene una alta compatibilidad con MySQL, aunque actualmente ambos proyectos han evolucionado de forma independiente.
 
-----
+#### Lenguaje SQL
+
+La sintaxis de SQL puede diferir de un RDBMS a otro. Sin embargo, todos deben seguir el estandar ISO para el Lenguaje de Consulta Estructurado. SQL se puede utilizar para realizar las siguientes acciones:
+- Recuperar datos
+- Actualizar datos
+- Eliminar datos
+- Crear nuevas tablas y bases de datos
+- Añadir / eliminar usuarios
+- Asignar permisos a estos usuarios
+
+---
 ## 1.1. 🗄️ Flujo
 El flujo de trabajo con MySQL es el siguiente: 
 
@@ -182,7 +223,7 @@ Los privilegios son estos:
 > - **Usuario con `'%'` como host y privilegios amplios**: Un usuario definido como `'jessica'@'%'` puede conectarse desde cualquier IP del mundo. Limitar siempre el host al mínimo necesario.
 
 ---------
-#### Gestión:
+#### Gestión
 Por tanto, tenemos estos comandos de gestión:
 
 | Acción                                    | Comando                                                     |
@@ -202,34 +243,18 @@ Por tanto, tenemos estos comandos de gestión:
 
 ## 2.1. Conexión y acceso
 
-| Acción                                            | Comando                                              |
-| ------------------------------------------------- | ---------------------------------------------------- |
-| Conectar al servidor local                        | `mysql -u root -p`                                   |
-| Conectar a servidor remoto                        | `mysql -u jessica -p -h 192.168.1.50 -P 3306`        |
-| Conectar y seleccionar base de datos directamente | `mysql -u jessica -p tienda`                         |
-| Ejecutar un comando aislado                       | `mysql -u jessica -p -e "SHOW DATABASES;"`           |
+| Acción                                            | Comando                                       |
+| ------------------------------------------------- | --------------------------------------------- |
+| Conectar al servidor local                        | `mysql -u root -p`                            |
+| Conectar a servidor remoto                        | `mysql -u jessica -p -h 192.168.1.50 -P 3306` |
+| Conectar y seleccionar base de datos directamente | `mysql -u jessica -p tienda`                  |
+| Ejecutar un comando aislado                       | `mysql -u jessica -p -e "SHOW DATABASES;"`    |
 
 ## 2.2. Creación y listado
 
-| Acción                                       | Comando                                                   |
-| -------------------------------------------- | --------------------------------------------------------- |
-| Listar bases de datos                        | `SHOW DATABASES;`                                         |
-| Ver base de datos actual                     | `SELECT DATABASE();`                                      |
-| Eliminar base de datos                       | `DROP DATABASE tienda;`                                   |
-| Listar tablas de una base de datos           | `SHOW TABLES FROM tienda;`                                |
-| Ver estructura de una tabla                  | `DESCRIBE clientes;` / `SHOW COLUMNS FROM clientes;`      |
-| Ver la sentencia CREATE de una base de datos | `SHOW CREATE DATABASE tienda;`                            |
-| Ver la sentencia CREATE de una tabla         | `SHOW CREATE TABLE clientes;`                             |
-| Renombrar tabla                              | `RENAME TABLE clientes TO customers;`                     |
-| Eliminar tabla                               | `DROP TABLE pedidos;`                                     |
-| Vaciar tabla (mantiene la estructura)        | `TRUNCATE TABLE pedidos;`                                 |
-| Copiar estructura de una tabla               | `CREATE TABLE clientes_backup LIKE clientes;`             |
-| Copiar estructura y datos                    | `CREATE TABLE clientes_backup AS SELECT * FROM clientes;` |
-
 ```sql
 -- Crear base de datos y entrar en ella
-CREATE DATABASE tienda;
-USE tienda;
+CREATE DATABASE tienda; USE tienda;
  
 -- CREATE TABLE nombre (columna1 tipo(bytes), columna2 tipo(bytes), columnaN tipo(bytes)); 
 -- Crear tabla
@@ -254,7 +279,6 @@ CREATE TABLE pedidos (
 );
 ```
 
-
 Podemos crear además un archivo `.sql` con las instrucciones para crear la tabla
 ```SQL
 sql> create database star_wars; use star_wars;
@@ -269,9 +293,15 @@ sudo mysqldump prueba > ~/Documentos/ejercicios.sql # exportar
 sudo mysqldump prueba < ~/Documentos/ejercicios.sql # importar
 ```
 
-
 ---
 ## 2.3. Consultar datos
+
+| Acción                             | Comando                               |
+| ---------------------------------- | ------------------------------------- |
+| Listar bases de datos              | `SHOW DATABASES;`                     |
+| Ver base de datos actual           | `SELECT DATABASE();`                  |
+| Listar tablas de una base de datos | `SHOW TABLES FROM emplyees;`          |
+| Mirar las columnas                 | `USE emplyees; describe departments;` |
 
 #### SELECT — consultar datos
 
@@ -438,8 +468,16 @@ SELECT c.nombre, p.total, pr.nombre AS producto FROM clientes c
 ---
 ## 2.4. Modificación
 
-#### INSERT — insertar datos
+| Operación                                            | Comando                                                   |
+| ---------------------------------------------------- | --------------------------------------------------------- |
+| Eliminar base de datos / tabla                       | `DROP DATABASE tienda;` / `DROP TABLE pedidos;`           |
+| Ver estructura de una tabla                          | `DESCRIBE clientes;` / `SHOW COLUMNS FROM clientes;`      |
+| Ver la sentencia CREATE de una base de datos o tabla | `SHOW CREATE DATABASE tienda;` / `SHOW CREATE TABLE ...;` |
+| Vaciar tabla (mantiene la estructura)                | `TRUNCATE TABLE pedidos;`                                 |
+| Copiar estructura de una tabla                       | `CREATE TABLE clientes_backup LIKE clientes;`             |
+| Copiar estructura y datos                            | `CREATE TABLE clientes_backup AS SELECT * FROM clientes;` |
 
+#### INSERT — insertar datos
 ```sql
 -- Insertar fila/filas en orden (nombre, email, edad)
 INSERT INTO clientes VALUES ('Jessica', 'jessica@empresa.com', 28),
@@ -471,8 +509,9 @@ ALTER TABLE clientes DROP INDEX idx_email;
 ALTER TABLE pedidos DROP FOREIGN KEY fk_cliente;
 
 -- Modificar tipo o atributos de una columna
-ALTER TABLE clientes RENAME COLUMN nombre TO nombre_completo;
-ALTER TABLE clientes MODIFY COLUMN nombre_completo VARCHAR(200) NOT NULL;
+RENAME TABLE clientes TO customers;
+ALTER TABLE customers RENAME COLUMN nombre TO nombre_completo;
+ALTER TABLE customers MODIFY COLUMN nombre_completo VARCHAR(200) NOT NULL;
 
 -- Cambiar el storage engine
 ALTER TABLE clientes ENGINE = InnoDB;
@@ -569,6 +608,7 @@ sql_warnings = yes # Imprime errores 🡆 sql inyection
 debug = 1          # Imprime inforamción 🡆 sql inyection
 ```
 
+
 > [!CAUTION] 
 > `LOAD DATA INFILE` / `INTO OUTFILE` Permite leer y escribir archivos del sistema desde SQL. Si un atacante tiene acceso a MySQL, puede leer `/etc/passwd` o escribir webshells.
 
@@ -581,3 +621,9 @@ SELECT '<?php system($_GET["cmd"]); ?>' INTO OUTFILE '/var/www/html/shell.php';
 ```
 
 > Deshabilitar con `secure_file_priv = /tmp` en `my.cnf` (restringe a ese directorio) o `secure_file_priv = ""` para deshabilitar completamente.
+
+
+
+
+
+
