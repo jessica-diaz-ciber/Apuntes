@@ -6,6 +6,24 @@
 #### Whatweb, wappaylyzer y curl
 Estas herramientas (Whatweb en cli y wappalyzer como extensión de firefox) pueden dar pistas de las tecnologías con las que está hecha la web: ¿Utiliza un CMS conocido? ¿Utiliza en cambio un framework?
 
+```bash
+$: curl -I https://inlanefreight.com
+
+# HTTP/1.1 301 Moved Permanently
+# Date: Fri, 31 May 2024 12:12:12 GMT
+# Server: Apache/2.4.41 (Ubuntu)
+# X-Redirect-By: WordPress
+# Location: https://www.inlanefreight.com/
+# Content-Type: text/html; charset=UTF-8
+```
+
+Por otro lado `whatweb`
+```bash
+$: whatweb app.inlanefreight.local
+# http://app.inlanefreight.local [200 OK] Apache[2.4.41], Bootstrap, Cookies[72af8f2b24261272e581a49f5c56de40], Country[RESERVED][ZZ], HTML5, HTTPServer[Ubuntu Linux][Apache/2.4.41 (Ubuntu)], HttpOnly[72af8f2b24261272e581a49f5c56de40], IP[10.129.99.135], JQuery, MetaGenerator[Joomla! - Open Source Content Management],....
+```
+
+----
 #### Certificado en HTTPs
 En HTTPs, podemos examinar el certificado SSL, que puede que contenga nombres de dominio:
 ```
@@ -14,10 +32,89 @@ CONNECTED(00000003)
 depth=0 CN = research.search.htb, CN = research
 ```
 
+----
 #### DNS
 Mediante DNS podemos obtener información con la herramienta `dig` o con `dnsenum`, tambien tratar de realizar una transferencia de zona AXFR.
 
+Tambien viene bien utilizar `whois` para sacar información de registro de la web.
+
 ----
+#### wafw00f
+La herramienta de wafw00f nos permite mirar si hay algun WAF detrás de la web o no
+
+```bash
+$: wafw00f inlanefreight.com
+
+# (...)    
+# [*] Checking https://inlanefreight.com
+# [+] The site https://inlanefreight.com is behind Wordfence (Defiant) WAF.
+```
+En este ejemplo está el WAF de Defiant detrás.
+
+
+---
+#### Nikto
+Nikto es una herramienta de analisis y enumeración web avanzada. Con la opción `-Tuning b` podemos indicar que solo utilice los módulos de escaneo de software. 
+
+Con este módulo podemos extraer información como:
+- Direcciones IPv4 e IPv6
+- Certificado SSL
+- Headers: por ejemplo si falta alguno de seguridad como el de `Strict-Transport-Security` o si hay alguno extraño
+- Tecnología de servidor (Ej `Apache/2.4.41 (Ubuntu)`) y CMS `WordPress`
+- Information disclosure: la presencia de un `license.txt`
+
+```bash
+$: nikto -h inlanefreight.com -Tuning b
+```
+
+> [!TIP]
+> Aun así Nikto solo se debe usar en entornos controlados por la cantidad masiva de peticiones que realiza y esta información se puede obtener con otras herramientas más discretas como `whatweb`. Nikto simplemente agiliza la enumeración a cambio de ruido.
+
+Otras herramientas de reconocimiento completo pueden ser:  [FinalRecon](https://github.com/thewhiteh4t/FinalRecon),  [Recon-ng](https://github.com/lanmaster53/recon-ng),  [theHarvester](https://github.com/laramies/theHarvester) o  [SpiderFoot](https://github.com/smicallef/spiderfoot) y   [OSINT Framework](https://osintframework.com/) para OSINT. Al igual que pasa con Nikto, son herramientas extremadamente ruidosas.
+```bash
+$: finalrecon --full --url http://inlanefreight.com
+```
+
+----
+## 0.2. Archivos importantes
+
+#### Robots.txt
+El archivo `robots.txt` es un archivo de texto plano ubicado en el directorio raíz de un sitio web (p. ej., `web.com/robots.txt`) e indica a los buscadores web que partes del sitio indexar y cuales no siguiendo una serie de directivas. 
+```
+User-agent: *
+Disallow: /private/
+```
+
+Siempre hay un `User-agent` que especifica a que rastreador o bot se aplican las reglas. Si pone un wildcard (`*`) indica que se aplican a todos los bots. Luego por otro lado están las directivas, que proporcionan instrucciones específicas al agente de usuario identificado como `Disallow` para que no accedan a dicho directorio o `Sitemap` con un mapa XML del sitio
+
+Este archivo protege contra la sobrecarga de los servidores y protefe la información sensible, pero da pistas sobre directorios ocultos que ayudan a una enumeración por parte de un atacante, por ejemplo  `/admin/`  o `/private/`.
+
+----
+#### Well known URI
+El estándar `.well-known`, sirve como un directorio estandarizado dentro del dominio raíz de un sitio web, normalmente bajo la ruta `/.well-known/`. Centraliza los metadatos críticos de un sitio web, incluyendo archivos de configuración e información relacionada con sus servicios, protocolos y mecanismos de seguridad. Entre esos archivos encontramos:
+
+- `security.txt`: Contiene información de contacto para que los investigadores de seguridad informen sobre vulnerabilidades.
+- `openid-configuration`: Define los detalles en formato JSON de configuración para OpenID Connect, una capa de identidad sobre el protocolo OAuth 2.0.
+
+> [!NOTE]
+> La información obtenida del _endpoint_ `openid-configuration` proporciona múltiples oportunidades de exploración: ya que nos proprociona rutas importantes, nivel de seguridad o detalles del algoritmo, información relevante para ataques contra JWK
+
+----
+####  Crawlers
+Los crawlers son algortimos que navegan automáticamente por la web, analiza su contenido y extrae todos sus enlaces. Luego, añade estos enlaces a una cola y los rastrea, repitiendo el proceso de forma iterativa.
+
+Estos crawlers pueden obtener emails, enlaces, comentarios, urls de archivos externos o imagenes y contenido multimedia (util para posibles rutas `LFI`)
+
+Los mas popilares son `Burp Suite Spider`, `OWASP ZAP` o `Apache nutch` y tambien tenemos la librería de python `scrapy`
+
+Scrapy permite usar la herramienta [reconSpider](https://academy.hackthebox.com/storage/modules/144/ReconSpider.v1.2.zip)
+```bash
+$: python3 ReconSpider.py http://inlanefreight.com
+$: cat results.json | jq .links[] | tr -d '"'    # enlaces
+$: cat results.json | jq .emails[] | tr -d '"' | awk -F'@' '{print $1}' | sort -u # usuarios
+```
+
+---
 ## 0.2. Enumeración pasiva
 Una vez identificadas las tecnologías básicas, podemos ahorrarnos mucho tiempo si ya tenemos nociones de cómo funcionan.
 
@@ -193,11 +290,8 @@ ffuf -u ‘https://web.com/search.php?q=FUZZ’ \
 ```
 
 
-
 ---
 ## 2.2. Fuzzing avanzado
-
-
 #### Fuzzing multiple
 
 ```bash
@@ -234,3 +328,6 @@ ffuf -request request.txt -request-proto https -w /usr/share/wordlists/rockyou.t
 ```
 
 Para http2 usamnos:  `-http2`
+
+> [!CAUTION 
+> **Fuzzing para explotar vulnerabilidades:** Distintas vulnerabilidades como el SQLim el OS inyection o el SQLi entre otras pueden servirse del fuzzing para encontrar payloads válidos. Por ejemplo, podemos fuzzear webroots para LFI con [esta lista de palabras para Linux](https://github.com/danielmiessler/SecLists/blob/master/Discovery/Web-Content/default-web-root-directory-linux.txt) o [esta lista de palabras para Windows](https://github.com/danielmiessler/SecLists/blob/master/Discovery/Web-Content/default-web-root-directory-windows.txt). 
