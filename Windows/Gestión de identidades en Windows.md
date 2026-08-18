@@ -310,10 +310,3 @@ C:\Users\Jessica>vaultcmd /list
 #        Ubicación: C:\Users\Jessica\AppData\Local\Microsoft\Vault\4BF4C442-9B8A-41A0-B380-DD4A704DDB28
 ```
 
-
-
-C:\Users\sadams\AppData\Roaming\Microsoft\Protect\S-1-5-21-1340203682-1669575078-4153855890-1003
-
-
-
-
