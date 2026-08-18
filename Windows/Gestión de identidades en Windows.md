@@ -127,43 +127,57 @@ Los privilegios son capacidades específicas asignadas a usuarios o grupos, inde
 ---
 # 4. 🔐 Autenticación y autorización en Windows
 
-Windows separa dos conceptos fundamentales: **autenticación** (comprobar que el usuario es quien dice ser) y **autorización** (qué acciones puede realizar sobre cada recurso).
+> [!NOTE]
+> Windows separa dos conceptos fundamentales: **autenticación** (comprobar que el usuario es quien dice ser) y **autorización** (qué acciones puede realizar sobre cada recurso).
 
 **Windows utiliza autenticación SSO (Single Sign-On)**, en la que el usuario se autentica una vez y accede a múltiples recursos sin volver a introducir credenciales. Esto funciona de la siguiente manera:
-
-1. **LSASS.exe es el proceso que maneja la autenticación**, la cual varía segun el SSP elegido (proveedor de seguridad), como Kerberos o por NTLM.
-    
+1. **LSASS.exe es el proceso que maneja la autenticación**, la cual varía según el SSP elegido (proveedor de seguridad), como Kerberos o por NTLM.
 2. **Una vez validadas las credenciales, el sistema crea una sesión de inicio de sesión (logon session)**, que puede ser local o remota según el tipo de acceso.
-    
 3. **A partir de esa sesión se genera un token de acceso**, que contiene la identidad del usuario y su _security context_ (sus grupos, privilegios y permisos).
-    
 4. **Cada vez que el usuario quiere realizar una acción**, como abrir un archivo o ejecutar un programa, **el sistema utiliza las credenciales almacenadas en memoria para la autenticación y crea un proceso con una copia asociada de su token**.
-    
 5. **Autorización →** Cuando el proceso intenta acceder a un recurso, el sistema compara el token con las ACL ("Access Control Lists") del objeto; dentro de ellas, las ACE ("Access Control Entries") determinan si el acceso se permite o se deniega.
 
-#### El proceso LSASS.exe - Local Security Authority Subsystem Service
-`lsass.exe` es el proceso central de seguridad de Windows. Corre con privilegios de **SYSTEM** y es el responsable de la autenticación, la creación y gestion de sesiones y la emisión de tokens.
 
-**Este proceso almacena en memoria las credenciales usadas, por tanto es el objetivo principal de los atacantes**, por tanto está protegido con meidas de seguridad como **PPL** (protege su memoria de ser leida por otros procesos) y **credential guard** (aisla las credenciales en un entorno virtual separado del kernel)
+---
+#### El proceso LSASS.exe
 
-> [!WARNING]
-> **SAM Database - Security Account Manager**
-> 
-> La **SAM** es la base de datos local donde Windows almacena los hashes NTLM de los usuarios locales. Se encuentra en la ruta `C:\Windows\System32\config\SAM` . Esta base de datos está bloqueada mientras Windows está en ejecución y cifrada con una clave almacenada en el registro /(`SYSTEM` hive). LSASS la lee al arrancar para poder autenticar usuarios.
->> Un usuario administrador o con `SeBackupPrivilege` puede crear un volcado de la sam con `reg save HKLM\SAM sam.bak` y `reg save HKLM\SYSTEM system.bak`. También es accesible desde un Live CD o si se obtiene el archivo desde una shadow copy.
+> [!CAUTION] 
+> `lsass.exe` es el proceso central de seguridad de Windows y se traduce como `LSA` o "Autoridad de Seguridad Local". Corre con privilegios de **SYSTEM** y es el responsable de la autenticación, la creación y gestión de sesiones, la traducción entre nombres de usuario y SIDs y la emisión de tokens y el control de acceso. Se encuentra en `%SystemRoot%\System32\Lsass.exe`
+
+**Este proceso almacena en memoria las credenciales usadas, por tanto es el objetivo principal de los atacantes**. Está protegido con medidas de seguridad como **PPL** (protege su memoria de ser leída por otros procesos) y **credential guard** (aisla las credenciales en un entorno virtual separado del kernel)
 
 ---
 ## 4.1. Modos de autenticación: SSPs
+Para la autenticación, existen varias soluciones distintas, aunque la mayoría son para entornos empresariales (Active Directory). 
 
-Para la autenticación, existen varias soluciones distintas, aunque la mayoría son para entornos empresariales (Active Directory)
+| Mecanismo                      | Descripción                                                                                                                                                                                                               |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **NTLM**                       | Método que transforma una contraseña en un hash que se envía y valida                                                                                                                                                     |
+| **Kerberos**                   | Sistema de autenticación basado en tickets. El usuario se autentica una vez y luego utiliza tickets cifrados para acceder a distintos servicios sin reenviar la contraseña.                                               |
+| **Certificate-based (PKINIT)** | Variante de Kerberos donde la autenticación inicial se realiza con certificados digitales en lugar de contraseña.                                                                                                         |
+| **Smart Card**                 | Uso de certificados almacenados en una tarjeta física. Funciona como PKINIT, pero el certificado está protegido por hardware.                                                                                             |
+| **Windows Hello**              | Método de autenticación local mediante biometría o PIN que desbloquea una clave criptográfica (o certificado) almacenada en el dispositivo, sin enviar la contraseña a la red y que se usa para autenticarse por Kerberos |
 
-| Mecanismo                      | Descripción                                                                                                                                                                                                |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **NTLM**                       | Método que transforma una contraseña en un hash que se envía y valida                                                                                                                                      |
-| **Kerberos**                   | Sistema de autenticación basado en tickets. El usuario se autentica una vez y luego utiliza tickets cifrados para acceder a distintos servicios sin reenviar la contraseña.                                |
-| **Certificate-based (PKINIT)** | Variante de Kerberos donde la autenticación inicial se realiza con certificados digitales en lugar de contraseña.                                                                                          |
-| **Smart Card**                 | Uso de certificados almacenados en una tarjeta física. Funciona como PKINIT, pero el certificado está protegido por hardware.                                                                              |
-| **Windows Hello**              | Método de autenticación local mediante biometría o PIN que desbloquea una clave criptográfica almacenada en el dispositivo, sin enviar la contraseña a la red. Esta clave descifra el contenido del disco. |
+----
+#### Paquetes de autenticación
+Según el modo de autenticación escogido, se usa un paquete de autenticación u otro,
+
+| **Paquetes**   | **Descripción**                                                                                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Lsasrv.dll`   | El "**Servidor LSA**" actúa como el gestor de paquetes de seguridad para la LSA. Contiene la función `Negotiate`, que selecciona el protocolo NTLM o Kerberos.                       |
+| `Msv1_0.dll`   | Paquete de autenticación para inicios de sesión en la máquina local que no requieren autenticación personalizada.                                                                    |
+| `Samsrv.dll`   | El Administrador de Cuentas de Seguridad (SAM) almacena las cuentas de seguridad locales                                                                                             |
+| `Kerberos.dll` | Paquete de seguridad cargado por la LSA para la autenticación basada en Kerberos en una máquina.                                                                                     |
+| `Netlogon.dll` | Servicio de inicio de sesión basado en la red.                                                                                                                                       |
+| `Ntdsa.dll`    | Agente del Sistema de Directorio (DSA) que se carga en los controladores de dominio. Gestiona la base de datos de AD (ntds.dit), procesa las consultas LDAP y maneja la replicación. |
+
+-------
+#### SAM y NTDS
+
+La **SAM** es la base de datos local donde Windows almacena los hashes NTLM de los usuarios locales. Se encuentra en la ruta `C:\Windows\System32\config\SAM` (Hive `HKLM\SAM`). Esta base de datos está bloqueada mientras Windows está en ejecución y cifrada con una clave almacenada en el registro (`SYSTEM` hive). LSASS la lee al arrancar para poder autenticar usuarios y solo los usuarios privilegiados o con `SeBackupPrivilege` pueden acceder a ella.
+
+Si un sistema se une a un dominio, el Controlador de Dominio (`DC`) validará las credenciales desde la base de datos de Active Directory (`ntds.dit`), que se almacena por defecto en `%SystemRoot%\NTDS\ntds.dit`. 
+
 
 ---
 ## 4.2. Proceso de Autenticación por NTLM
@@ -192,7 +206,7 @@ Existen dos versiones de NTLM
 > **Cracking offline de hashes NTLM**: Un atacante puede interceptar el challenge y descifrarlo probando múltiples contraseñas posibles en un ataque por fuerza bruta. Para cada contraseña candidata, el atacante calcula su hash, lo usa para cifrar el desafío interceptado y compara el resultado con la respuesta real. Si los valores coinciden, el atacante ha encontrado la contraseña en texto plano
 
 > [!CAUTION]
-> **Pass The Hash:* *Como lo que utiliza la autenticación de windows para completar el "desafío-respuesta" de la autenticación es el jasj, el atacante puede usarlo directante para acceder al sistema. Ademas como los hahes no cambian a menos que se cambie de contraseña, un atacante puede reutilizarlo las veces que quiera.
+> **Pass The Hash:** Como lo que utiliza la autenticación de windows para completar el "desafío-respuesta" de la autenticación es el jasj, el atacante puede usarlo directante para acceder al sistema. Ademas como los hahes no cambian a menos que se cambie de contraseña, un atacante puede reutilizarlo las veces que quiera.
 
 El formato que usan los hashes NTLMv2 es este:
 ```c
@@ -207,7 +221,6 @@ jessica:1001:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0::
 
 ---
 ## 4.3. Tipo de logins
-
 Cuando un usuario se autentica, Windows registra el **tipo de logon**. Esto es crítico en seguridad porque determina **qué credenciales se almacenan en memoria**.
 
 | Logon Type            | ID  | Descripción                                                                                        | Qué queda en memoria                                          |
@@ -221,18 +234,86 @@ Cuando un usuario se autentica, Windows registra el **tipo de logon**. Esto es c
 | **RemoteInteractive** | 10  | RDP — escritorio remoto                                                                            | ✅ Sí, es una sesión completa                                  |
 | **CachedInteractive** | 11  | Login offline con credenciales cacheadas                                                           | ✅ Sí, en la máquina local                                     |
 
-> Desde Windows 8.1 existe el modo **Restricted Admin** para RDP: la sesión se abre con un Impersonation Token en lugar de credenciales completas, evitando que queden en memoria. Se activa con `mstsc /restrictedAdmin`.
+> Desde Windows 8.1 existe el modo **Restricted Admin** para RDP: la sesión se comporta como un logon de tipo **Network (3)** en el equipo remoto en lugar de una sesión interactiva completa, por lo que el usuario nunca entrega su contraseña ni su hash NTLM al host remoto y no quedan credenciales cacheadas ahí.  
 
-> [!CAUTION]
-> **El problema del "Double Hop"**: El **Double Hop** es la situación en la que un usuario se conecta a un **Servidor A**, y desde ahí quiere acceder a un **Servidor B** con sus credenciales. El segundo salto es el problema. ¿Porqué? Porque al autenticarse en el servidor A, este crea el token pero no almacena las credenciales, por tanto no puede autenticarse en el servidor B.
->> - Para resolver esto, existen soluciones como la delegación de kerberos o CredSSP (reenvío de credenciales) pero ambas soluciones plantean cierto riesgo.
 
-> [!NOTE]
-> **Impersonation:** Un servicio puede recibir una conexión de un usuario y crear un **Impersonation Token** para actuar en su nombre sin tener sus credenciales. Esto es la base de la delegación y también del abuso de `SeImpersonatePrivilege` (Ej: Potato Attacks).
+----
+#### Inicio de sesión interactivo local
+El inicio de sesión interactivo local (`LogonType 2`) se lleva a cabo mediante el proceso de inicio de sesión de Windows:
+
+1️⃣ `Winlogon` es el componente que gestiona el inicio de sesión interactivo. Primero lanza `LogonUI`, la interfaz gráfica de login, que recopila las credenciales introducidas por el usuario a través de los **credential providers** (los plugins que definen cómo se piden las credenciales: contraseña, PIN, tarjeta, etc.). `Win32k.sys` es el driver en modo kernel que da soporte a la GUI en general, pero no es el componente que gestiona directamente la entrada de credenciales.
+
+2️⃣ Una vez obtenidas las credenciales, se entregan a **LSASS**, que las valida mediante el **paquete de autenticación** correspondiente (por ejemplo, NTLM o Kerberos). Si la autenticación tiene éxito, LSASS obtiene un **Access Token** asociado al usuario.
+
+3️⃣ Con la autenticación completada, Windows utiliza ese contexto de seguridad para iniciar `userinit.exe`, que realiza tareas de inicialización del entorno de usuario y posteriormente puede iniciar el shell de Windows (`explorer.exe`).
 
 ---
-## 🔗 Ver también
+#### Inicio de sesión remota
 
-- [[Active Directory]]
-- [[Active Directory; Kerberos]]
-- [[Windows; Escalada de privilegios]]
+Se produce mediante RDP o SMB y sigue un proceso similar donde se obtienen las credenciales del usuario y LSASS lanza el proceso correspondiente usando su nuevo token de sesión.
+
+> [!CAUTION] 
+> **El problema del "Double Hop"**: El **Double Hop** es la situación en la que un usuario se conecta a un **Servidor A**, y desde ahí quiere acceder a un **Servidor B** con sus credenciales. El segundo salto es el problema. ¿Por qué? Porque al autenticarse en el servidor A, este crea el token pero no almacena las credenciales, por tanto no puede autenticarse en el servidor B.
+> 
+> > - Para resolver esto, existen soluciones como la delegación de Kerberos o CredSSP (reenvío de credenciales) pero ambas soluciones plantean cierto riesgo.
+
+**Impersonation:** Un servicio puede recibir una conexión de un usuario y crear un **Impersonation Token** para actuar en su nombre sin tener sus credenciales. Esto es la base de la delegación y también del abuso de `SeImpersonatePrivilege` (Ej: Potato Attacks).
+
+> [!NOTE] 
+> El hive `security` (`HKLM\Security`) contiene credenciales de inicio de sesión remotos en el dominio, en forma de hashes DCC2 (utilizan `PBKDF2` y son invulnerables a pass the hash). También tiene credenciales DPAPI
+
+
+---
+## 4.4. DPAPI
+
+> [!NOTE]
+> El un motor de cifrado del que dependen muchísimas cosas: contraseñas guardadas en el navegador, credenciales de Wi-Fi, certificados con clave privada exportable, cookies de sesión y el credential manager
+
+Cada usuario dispone de **DPAPI master keys**, almacenada bajo `%APPDATA%\Microsoft\Protect\<SID>\`. Las master keys están protegidas mediante claves derivadas de las credenciales del usuario y mecanismos adicionales de Windows.
+
+> En dominio, si el usuario olvida su contraseña o el admin la resetea, existe una **DPAPI backup key** a nivel de dominio (guardada en el DC) que permite recuperar/descifrar las master keys sin conocer la contraseña original.
+
+DPAPI se utiliza para proteger criptográficamente numerosos secretos almacenados por Windows y aplicaciones, incluyendo determinados datos gestionados por Credential Manager y Windows Vault.
+
+---
+#### Credential Manager
+Credential Manager es el sistema de Windows para gestionar credenciales persistentes (para recursos de red; aplicaciones, RDP...). Los datos están almacenados en `%APPDATA%\Microsoft\Credentials\`
+
+Se accede por `Control Panel > Credential Manager` o el comando `cmdkey`:
+```bash
+cmd> cmdkey /list
+# Target: Domain:interactive=SRV01\mcharles  🡆 credencial de dominio interactiva 🡆 runas
+# Type: Domain Password 
+# User: SRV01\mcharles
+cmd> runas /savecred /user:SRV01\mcharles cmd
+```
+
+------
+#### Windows Vaults
+Los Windows Vaults son un mecanismo de almacenamiento estructurado de credenciales. Cada vault tiene un un identificador (GUID), un esquema/tipo de credencial, registros (vault items) y datos asociados a esos registros. 
+
+Se almacena bajo: `%APPDATA%\Microsoft\Vault\<GUID>` y guarda este tipo de contraseñas:
+- **Credenciales web**: credenciales de cuentas online (Microsoft Edge legacy)
+- **Windows Credentials**: almacena tokens de one drive y recursos y servicios en red
+
+Es posible exportar los Almacenes de Windows a archivos `.crd` ya sea a través del Panel de Control o con el siguiente comando. Las copias de seguridad creadas de esta manera se cifran con una contraseña proporcionada por el usuario y se pueden importar en otros sistemas Windows.
+```bash
+C:\Users\administrator> rundll32 keymgr.dll,KRShowKeyMgr
+```
+
+Se listan con `vaultcmd /list`
+```bash
+C:\Users\Jessica>vaultcmd /list
+# Almacenes cargados actualmente:
+#        Almacén: Credenciales web
+#        GUID de almacén:4BF4C442-9B8A-41A0-B380-DD4A704DDB28
+#        Ubicación: C:\Users\Jessica\AppData\Local\Microsoft\Vault\4BF4C442-9B8A-41A0-B380-DD4A704DDB28
+```
+
+
+
+C:\Users\sadams\AppData\Roaming\Microsoft\Protect\S-1-5-21-1340203682-1669575078-4153855890-1003
+
+
+
+
