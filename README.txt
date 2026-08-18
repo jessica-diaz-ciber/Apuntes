@@ -1,4 +1,4 @@
-"Este libro pertenece al Príncipe Mestizo"
+"Este repositorio pertenece al Príncipe Mestizo"
                                     
             ,     ,
             )\___/(
