@@ -60,17 +60,16 @@ Mediante powershell, también podemos gestionar usuarios y grupos.
 
 
 ## 2.2. Autenticación por Kerberos
-
 Nuestro entorno es este:
 
-|Rol|Hostname|FQDN|IP|
-|---|---|---|---|
-|DC|AD01|AD01.Dominio.local|10.10.10.01|
-|Máquina unida|AD02|AD02.Dominio.local|10.10.10.02|
+| Rol           | Hostname | FQDN           | IP          |
+| ------------- | -------- | -------------- | ----------- |
+| DC            | AD01     | AD01.web.local | 10.10.10.01 |
+| Máquina unida | AD02     | AD02.web.local | 10.10.10.02 |
 
-Por tanto estos nombres deben quedar reflejados en el archivo `/etc/hosts` para la resolución de nombres.
+Por tanto, estos nombres deben quedar reflejados en el archivo `/etc/hosts` para la resolución de nombres.
 
-1️⃣ Instalar los módulos de krb5** con el paquete `krb5-user` y generar un archivo `/etc/krb5.conf`. Esto lo podemos hacer con:
+1️⃣ **Configurar Kerberos:** Instalamos los módulos de Kerberos con el paquete `krb5-user` y generamos un archivo `/etc/krb5.conf`.
 ```bash
 nxc smb AD01.dominio.local --generate-krb5-file krb5.conf
 ```
@@ -80,30 +79,37 @@ El archivo tendría este aspecto:
 [libdefaults]
    dns_lookup_kdc = false
    dns_lookup_realm = false
-   default_realm = DOMINIO.LOCAL
+   default_realm = WEB.LOCAL
 
 [realms]
    DOMINIO.LOCAL = {
-       kdc = AD01.DOMINIO.local
-       admin_server = AD01.DOMINIO.local
+       kdc = AD01.WEB.local
+       admin_server = AD01.WEB.local
    }
 
 [domain_realm]
-   .dominio.local = DOMINIO.LOCAL
-   dominio.local = DOMINIO.LOCAL
+   .web.local = WEB.LOCAL
+   web.local = WEB.LOCAL
 ```
+> Kerberos es especialmente sensible a la **resolución DNS/nombres** y a la **hora del sistema**.
 
-2️⃣ Obtener el TGT del usuario:
+2️⃣ Obtener el TGT del usuario: Podemos obtener un TGT utilizando la contraseña del usuario:
 ```bash
-kinit usuario@dominio.local
-# o bien
-impacket-GetTGT dominio.local/usuario:pass123
+kinit usuario@web.local
+impacket-GetTGT web.local/usuario:pass123 # o asi, obteniendo un archivo .ccache
 ```
+Nos solicitará la contraseña y almacenará el ticket en la caché de credenciales de Kerberos.
 
-3️⃣ Guardar el ticket en una variable** llamada `KRB5CCNAME`:
+3️⃣ Si hemos obtenido el ticket `ccaché`, podemos indicar a las herramientas dónde encontrarlo mediante la variable `KRB5CCNAME` y comprobamos que se haya cargado en memoria
 ```bash
 export KRB5CCNAME=usuario.ccache
+klist
 ```
+
+> [!NOTE]
+> Otra forma de autenticarnos mediante Kerberos es utilizar un **keytab**. Un keytab es un archivo que contiene **claves asociadas a una cuenta Kerberos y que permiten obtener un TGT**. Los archivos tienen extensiones `keytab`/`kt`
+> 
+> El keytab puede utilizarse directamente con `kinit` : `kinit DC01@web.LOCAL -k -t /ruta/svc_workstations.kt` creando el tgt
 
 4️⃣ Listar los tickets en memoria
 ```bash
